@@ -1,0 +1,41 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+# SQLite WAL sidecar files
+*.db-*
+*.sqlite3-*
+*.sqlite-*
+
+# Test cache
+.pytest_cache/
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# SQLite database files
+*.sqlite3
+*.db
+*.sqlite
+
+# IDE & OS temporary files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Log files & temporary runtime files
+*.log
+tmp/
+temp/
