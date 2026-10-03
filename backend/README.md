@@ -56,7 +56,7 @@ Bạn có thể:
 
 ## 5. Chạy bộ kiểm thử tự động (Automated Tests)
 
-Chạy toàn bộ 23 test cases (bao gồm Milestone 1, 2 và 3) với cơ sở dữ liệu tạm thời (được cô lập hoàn toàn, không ảnh hưởng đến database phát triển):
+Chạy toàn bộ 39 test cases (bao gồm các ca hồi quy sau code review) với cơ sở dữ liệu tạm thời (được cô lập hoàn toàn, không ảnh hưởng đến database phát triển):
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v
@@ -158,6 +158,9 @@ $reply | ConvertTo-Json -Depth 5
     }
   }
   ```
+- Trong một tiến trình Uvicorn, các request trùng `request_id` được xử lý lần lượt: request chờ đọc lại kết quả đã lưu trước khi gọi AI. Chờ tối đa 35 giây; quá hạn trả HTTP 503 `REQUEST_IN_PROGRESS`. Cơ chế này nằm trong bộ nhớ tiến trình, **không** ngăn hai lời gọi AI ở nhiều worker hoặc nhiều tiến trình server. Chạy một worker cho bản demo này. SQLite vẫn dùng khóa chính duy nhất và transaction để ngăn lưu cặp tin nhắn trùng.
+- Nếu SQLite bị busy/locked, server chờ tối đa 2 giây cho mỗi thao tác rồi trả HTTP 503 `DATABASE_BUSY`, kèm `Retry-After: 1`. Android giữ nguyên `request_id` và nội dung khi thử lại. Nếu AI không trả về câu trả lời dạng chuỗi có nội dung, server trả 503 `LLM_UNAVAILABLE` và không lưu cặp tin nhắn. Emotion thiếu/lạ được chuẩn hóa thành `neutral`.
+- Timestamp phản hồi vẫn là UTC ISO 8601 hậu tố `Z`, hiện có phần microsecond để sắp xếp chính xác các chat hoạt động trong cùng một giây. Tin nhắn vẫn xếp cũ trước mới; khi timestamp bằng nhau, thứ tự ghi quyết định vị trí.
 
 ---
 

@@ -11,6 +11,7 @@ from app.exceptions import (
     ConversationNotFoundException,
     InvalidMessageException,
     InvalidRequestIdException,
+    InvalidAIReplyException,
     RequestIdConflictException,
 )
 from app.schemas.conversation import (
@@ -23,9 +24,11 @@ from app.schemas.conversation import (
     SendMessageResponse,
 )
 import app.services.mock_ai as mock_ai
+from app.services.request_guard import own_request
 from app.utils.time import utc_now_iso
 
 router = APIRouter(tags=["Conversations"])
+VALID_EMOTIONS = {"neutral", "happy", "sad", "surprised"}
 
 
 @router.post(
@@ -79,7 +82,10 @@ def list_conversations(
         SELECT id, title, created_at, updated_at
         FROM conversations
         WHERE client_id = ?
-        ORDER BY updated_at DESC, rowid DESC
+        ORDER BY CASE
+            WHEN length(updated_at) = 20 THEN substr(updated_at, 1, 19) || '.000000Z'
+            ELSE updated_at
+        END DESC, rowid DESC
         """,
         (client_id,),
     )
@@ -127,7 +133,10 @@ def get_conversation_messages(
         SELECT id, role, text, emotion, created_at
         FROM messages
         WHERE conversation_id = ?
-        ORDER BY created_at ASC, rowid ASC
+        ORDER BY CASE
+            WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
+            ELSE created_at
+        END ASC, rowid ASC
         """,
         (conv_id,),
     )
@@ -178,11 +187,40 @@ def delete_conversation(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id: str, message: str):
+    """Return a committed pair, or None when this request ID is unused."""
+    row = db.execute(
+        """SELECT client_id, conversation_id, normalized_message, user_message_id, assistant_message_id
+           FROM idempotency_records WHERE request_id = ?""",
+        (req_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    if row["client_id"] != client_id or row["conversation_id"] != conv_id:
+        raise RequestIdConflictException("Request ID belongs to another conversation or client")
+    if row["normalized_message"] != message:
+        raise RequestIdConflictException("Request ID was used with different message text")
+    user = db.execute(
+        "SELECT id, role, text, emotion, created_at FROM messages WHERE id = ?",
+        (row["user_message_id"],),
+    ).fetchone()
+    assistant = db.execute(
+        "SELECT id, role, text, emotion, created_at FROM messages WHERE id = ?",
+        (row["assistant_message_id"],),
+    ).fetchone()
+    if user is None or assistant is None:
+        raise RuntimeError("Idempotency record refers to missing messages")
+    return SendMessageResponse(
+        user_message=MessageResponse(**dict(user)),
+        assistant_message=MessageResponse(**dict(assistant)),
+    )
+
+
 @router.post(
     "/conversations/{id}/messages",
     response_model=SendMessageResponse,
     status_code=status.HTTP_200_OK,
-    summary="Gửi tin nhắn và nhận câu trả lời từ AI",
+    summary="Send a message and receive an AI reply",
 )
 def send_message(
     id: str,
@@ -190,211 +228,117 @@ def send_message(
     client_id: str = Depends(get_client_id),
     db: sqlite3.Connection = Depends(get_db),
 ) -> SendMessageResponse:
-    """Gửi tin nhắn vào cuộc trò chuyện và nhận phản hồi từ Mock AI.
-
-    Đảm bảo tính lũy thỏa (idempotency), cập nhật updated_at của cuộc trò chuyện,
-    và lưu trữ nguyên tử trong một transaction SQLite.
-    """
+    """Send a message using process-local request ownership and an atomic SQLite write."""
     conv_id = validate_conversation_id(id)
-
-    # 1. Kiểm tra tính hợp lệ của request_id
     if payload is None or not payload.request_id or not payload.request_id.strip():
-        raise InvalidRequestIdException("request_id là bắt buộc")
+        raise InvalidRequestIdException("request_id is required")
     try:
-        req_uuid = uuid.UUID(payload.request_id.strip())
-        req_id = str(req_uuid)
+        req_id = str(uuid.UUID(payload.request_id.strip()))
     except (ValueError, TypeError, AttributeError):
-        raise InvalidRequestIdException("request_id phải là định dạng UUID hợp lệ")
+        raise InvalidRequestIdException("request_id must be a valid UUID")
 
-    # 2. Kiểm tra tính hợp lệ của nội dung tin nhắn
     if payload.message is None or not isinstance(payload.message, str):
-        raise InvalidMessageException("Nội dung tin nhắn không hợp lệ")
-
+        raise InvalidMessageException("Message text is invalid")
     normalized_msg = payload.message.strip()
-    if len(normalized_msg) == 0:
-        raise InvalidMessageException("Nội dung tin nhắn không được để trống")
+    if not normalized_msg:
+        raise InvalidMessageException("Message text cannot be empty")
     if len(normalized_msg) > 2000:
-        raise InvalidMessageException("Nội dung tin nhắn không được vượt quá 2000 ký tự")
+        raise InvalidMessageException("Message text cannot exceed 2000 characters")
 
-    # 3. Kiểm tra cuộc trò chuyện có tồn tại và thuộc về client hiện tại
-    conv_row = db.execute(
-        "SELECT id FROM conversations WHERE id = ? AND client_id = ?",
-        (conv_id, client_id),
-    ).fetchone()
-    if not conv_row:
-        raise ConversationNotFoundException("Cuộc trò chuyện không tồn tại")
-
-    # 4. Kiểm tra Idempotency trước khi gọi AI (Fast path)
-    idemp_row = db.execute(
-        """
-        SELECT client_id, conversation_id, normalized_message, user_message_id, assistant_message_id
-        FROM idempotency_records
-        WHERE request_id = ?
-        """,
-        (req_id,),
-    ).fetchone()
-
-    if idemp_row:
-        # Kiểm tra phạm vi client và cuộc trò chuyện
-        if idemp_row["client_id"] != client_id or idemp_row["conversation_id"] != conv_id:
-            raise RequestIdConflictException("Request ID đã được sử dụng cho một hội thoại hoặc client khác")
-
-        # Kiểm tra nội dung tin nhắn có trùng khớp hay không
-        if idemp_row["normalized_message"] != normalized_msg:
-            raise RequestIdConflictException("Request ID đã được sử dụng với nội dung tin nhắn khác")
-
-        # Đọc cặp tin nhắn đã lưu trước đó và trả về nguyên trạng
-        u_row = db.execute(
-            "SELECT id, role, text, emotion, created_at FROM messages WHERE id = ?",
-            (idemp_row["user_message_id"],),
+    # A retry waits for the owner, then checks the committed result before calling AI.
+    with own_request(req_id):
+        conv_row = db.execute(
+            "SELECT id FROM conversations WHERE id = ? AND client_id = ?",
+            (conv_id, client_id),
         ).fetchone()
-        a_row = db.execute(
-            "SELECT id, role, text, emotion, created_at FROM messages WHERE id = ?",
-            (idemp_row["assistant_message_id"],),
-        ).fetchone()
+        if conv_row is None:
+            raise ConversationNotFoundException()
 
-        if u_row and a_row:
-            return SendMessageResponse(
-                user_message=MessageResponse(
-                    id=u_row["id"],
-                    role=u_row["role"],
-                    text=u_row["text"],
-                    emotion=u_row["emotion"],
-                    created_at=u_row["created_at"],
-                ),
-                assistant_message=MessageResponse(
-                    id=a_row["id"],
-                    role=a_row["role"],
-                    text=a_row["text"],
-                    emotion=a_row["emotion"],
-                    created_at=a_row["created_at"],
-                ),
-            )
+        saved = _saved_response(db, req_id, client_id, conv_id, normalized_msg)
+        if saved is not None:
+            return saved
 
-    # 5. Lấy tối đa 10 tin nhắn gần nhất làm ngữ cảnh (sắp xếp cũ -> mới)
-    ctx_cursor = db.execute(
-        """
-        SELECT role, text, emotion
-        FROM (
-            SELECT role, text, emotion, created_at, rowid
-            FROM messages
-            WHERE conversation_id = ?
-            ORDER BY created_at DESC, rowid DESC
-            LIMIT 10
-        )
-        ORDER BY created_at ASC, rowid ASC
-        """,
-        (conv_id,),
-    )
-    context = [
-        {"role": r["role"], "text": r["text"], "emotion": r["emotion"]}
-        for r in ctx_cursor.fetchall()
-    ]
+        rows = db.execute(
+            """SELECT role, text, emotion FROM (
+                   SELECT role, text, emotion, created_at, rowid
+                   FROM messages WHERE conversation_id = ?
+                   ORDER BY CASE
+                       WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
+                       ELSE created_at
+                   END DESC, rowid DESC LIMIT 10
+               ) ORDER BY CASE
+                   WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
+                   ELSE created_at
+               END ASC, rowid ASC""",
+            (conv_id,),
+        ).fetchall()
+        context = [
+            {"role": row["role"], "text": row["text"], "emotion": row["emotion"]}
+            for row in rows
+        ]
+        result = mock_ai.generate_reply(context, normalized_msg)
+        if not isinstance(result, (tuple, list)) or len(result) != 2:
+            raise InvalidAIReplyException()
+        reply_text, reply_emotion = result
+        if not isinstance(reply_text, str) or not reply_text.strip():
+            raise InvalidAIReplyException()
+        reply_text = reply_text.strip()
+        if not isinstance(reply_emotion, str) or reply_emotion not in VALID_EMOTIONS:
+            reply_emotion = "neutral"
 
-    # 6. Gọi Mock AI (Không giữ write lock của SQLite trong lúc chờ phản hồi AI)
-    reply_text, reply_emotion = mock_ai.generate_reply(context, normalized_msg)
-
-    user_msg_id = str(uuid.uuid4())
-    asst_msg_id = str(uuid.uuid4())
-    now_ts = utc_now_iso()
-
-    # 7. Lưu trữ nguyên tử trong một transaction SQLite
-    try:
-        with db:
-            # Lưu tin nhắn người dùng
-            db.execute(
-                """
-                INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (user_msg_id, conv_id, "user", normalized_msg, None, now_ts),
-            )
-            # Lưu tin nhắn trợ lý ảo
-            db.execute(
-                """
-                INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (asst_msg_id, conv_id, "assistant", reply_text, reply_emotion, now_ts),
-            )
-            # Lưu bản ghi kiểm tra Idempotency (với khóa chính request_id)
-            db.execute(
-                """
-                INSERT INTO idempotency_records (
-                    request_id, client_id, conversation_id, normalized_message,
-                    user_message_id, assistant_message_id, created_at
+        user_msg_id = str(uuid.uuid4())
+        asst_msg_id = str(uuid.uuid4())
+        now_ts = utc_now_iso()
+        try:
+            with db:
+                # BEGIN IMMEDIATE prevents deletion between the ownership recheck and inserts.
+                db.execute("BEGIN IMMEDIATE")
+                if db.execute(
+                    "SELECT 1 FROM conversations WHERE id = ? AND client_id = ?",
+                    (conv_id, client_id),
+                ).fetchone() is None:
+                    raise ConversationNotFoundException()
+                db.execute(
+                    """INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (user_msg_id, conv_id, "user", normalized_msg, None, now_ts),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (req_id, client_id, conv_id, normalized_msg, user_msg_id, asst_msg_id, now_ts),
-            )
-            # Cập nhật thời gian updated_at của cuộc trò chuyện
-            db.execute(
-                "UPDATE conversations SET updated_at = ? WHERE id = ?",
-                (now_ts, conv_id),
-            )
+                db.execute(
+                    """INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (asst_msg_id, conv_id, "assistant", reply_text, reply_emotion, now_ts),
+                )
+                db.execute(
+                    """INSERT INTO idempotency_records
+                       (request_id, client_id, conversation_id, normalized_message,
+                        user_message_id, assistant_message_id, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (req_id, client_id, conv_id, normalized_msg, user_msg_id, asst_msg_id, now_ts),
+                )
+                db.execute(
+                    "UPDATE conversations SET updated_at = ? WHERE id = ? AND client_id = ?",
+                    (now_ts, conv_id, client_id),
+                )
+        except sqlite3.IntegrityError as exc:
+            # The constraint is the final guard if another process handles the same key.
+            if getattr(exc, "sqlite_errorname", "") == "SQLITE_CONSTRAINT_FOREIGNKEY":
+                if db.execute(
+                    "SELECT 1 FROM conversations WHERE id = ? AND client_id = ?",
+                    (conv_id, client_id),
+                ).fetchone() is None:
+                    raise ConversationNotFoundException() from exc
+                raise
+            saved = _saved_response(db, req_id, client_id, conv_id, normalized_msg)
+            if saved is not None:
+                return saved
+            raise
 
         return SendMessageResponse(
             user_message=MessageResponse(
-                id=user_msg_id,
-                role="user",
-                text=normalized_msg,
-                emotion=None,
-                created_at=now_ts,
+                id=user_msg_id, role="user", text=normalized_msg, emotion=None, created_at=now_ts
             ),
             assistant_message=MessageResponse(
-                id=asst_msg_id,
-                role="assistant",
-                text=reply_text,
-                emotion=reply_emotion,
-                created_at=now_ts,
+                id=asst_msg_id, role="assistant", text=reply_text,
+                emotion=reply_emotion, created_at=now_ts
             ),
         )
-
-    except sqlite3.IntegrityError:
-        # Trường hợp hai request đồng thời với cùng request_id:
-        # Transaction của request này bị rollback, đọc bản ghi đã commit của request kia
-        winner_row = db.execute(
-            """
-            SELECT client_id, conversation_id, normalized_message, user_message_id, assistant_message_id
-            FROM idempotency_records
-            WHERE request_id = ?
-            """,
-            (req_id,),
-        ).fetchone()
-
-        if winner_row:
-            if (
-                winner_row["client_id"] == client_id
-                and winner_row["conversation_id"] == conv_id
-                and winner_row["normalized_message"] == normalized_msg
-            ):
-                u_row = db.execute(
-                    "SELECT id, role, text, emotion, created_at FROM messages WHERE id = ?",
-                    (winner_row["user_message_id"],),
-                ).fetchone()
-                a_row = db.execute(
-                    "SELECT id, role, text, emotion, created_at FROM messages WHERE id = ?",
-                    (winner_row["assistant_message_id"],),
-                ).fetchone()
-                if u_row and a_row:
-                    return SendMessageResponse(
-                        user_message=MessageResponse(
-                            id=u_row["id"],
-                            role=u_row["role"],
-                            text=u_row["text"],
-                            emotion=u_row["emotion"],
-                            created_at=u_row["created_at"],
-                        ),
-                        assistant_message=MessageResponse(
-                            id=a_row["id"],
-                            role=a_row["role"],
-                            text=a_row["text"],
-                            emotion=a_row["emotion"],
-                            created_at=a_row["created_at"],
-                        ),
-                    )
-            else:
-                raise RequestIdConflictException("Request ID đã được sử dụng với nội dung tin nhắn khác")
-
-        raise

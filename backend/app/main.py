@@ -1,6 +1,7 @@
 """Main entrypoint for the FastAPI backend application."""
 
 from contextlib import asynccontextmanager
+import sqlite3
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ from app.exceptions import (
     api_exception_handler,
     generic_exception_handler,
     http_exception_handler,
+    sqlite_operational_exception_handler,
     validation_exception_handler,
 )
 
@@ -36,6 +38,7 @@ app = FastAPI(
 app.add_exception_handler(APIException, api_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(sqlite3.OperationalError, sqlite_operational_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
 # Enable CORS for local development and testing
