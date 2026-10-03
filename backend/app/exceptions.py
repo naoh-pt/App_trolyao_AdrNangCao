@@ -1,5 +1,7 @@
 """Custom exceptions and error handlers matching the API contract."""
 
+import sqlite3
+
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -56,6 +58,16 @@ class LLMTimeoutException(APIException):
         super().__init__(status_code=504, code="LLM_TIMEOUT", message=message)
 
 
+class RequestInProgressException(APIException):
+    def __init__(self):
+        super().__init__(503, "REQUEST_IN_PROGRESS", "Yêu cầu đang xử lý; vui lòng thử lại với cùng request_id")
+
+
+class InvalidAIReplyException(APIException):
+    def __init__(self):
+        super().__init__(503, "LLM_UNAVAILABLE", "AI không trả về câu trả lời hợp lệ")
+
+
 async def api_exception_handler(request: Request, exc: APIException) -> JSONResponse:
     """Handle custom API exceptions."""
     return JSONResponse(
@@ -82,6 +94,20 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=400,
         content={"error": {"code": "BAD_REQUEST", "message": f"Dữ liệu không hợp lệ: {msg}"}},
     )
+
+
+async def sqlite_operational_exception_handler(request: Request, exc: sqlite3.OperationalError) -> JSONResponse:
+    """Expose only transient lock contention as a retryable error."""
+    error_code = getattr(exc, "sqlite_errorcode", None)
+    busy = (error_code is not None and error_code & 0xFF in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED})
+    busy = busy or "locked" in str(exc).lower() or "busy" in str(exc).lower()
+    if busy:
+        return JSONResponse(
+            status_code=503,
+            content={"error": {"code": "DATABASE_BUSY", "message": "Cơ sở dữ liệu đang bận; thử lại với cùng request_id"}},
+            headers={"Retry-After": "1"},
+        )
+    return await generic_exception_handler(request, exc)
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:

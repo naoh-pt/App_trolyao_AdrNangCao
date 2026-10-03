@@ -11,17 +11,21 @@ def get_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     target_path = db_path or app_config.DATABASE_PATH
     Path(target_path).parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(target_path, timeout=15.0)
+    # One bounded wait per SQLite operation. The client may retry with request_id.
+    # FastAPI may resume a sync yield dependency in another worker thread.
+    conn = sqlite3.connect(target_path, timeout=2.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    conn.execute("PRAGMA journal_mode = WAL;")
     return conn
 
 
 def init_db(db_path: Optional[str] = None) -> None:
     """Initialize database tables and indexes."""
-    with get_connection(db_path) as conn:
-        conn.executescript("""
+    conn = get_connection(db_path)
+    try:
+        conn.execute("PRAGMA journal_mode = WAL;")
+        with conn:
+            conn.executescript("""
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,
@@ -61,7 +65,9 @@ def init_db(db_path: Optional[str] = None) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_idempotency_lookup
                 ON idempotency_records(client_id, conversation_id, request_id);
-        """)
+            """)
+    finally:
+        conn.close()
 
 
 def get_db() -> Generator[sqlite3.Connection, None, None]:

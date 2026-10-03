@@ -182,6 +182,8 @@ Tất cả các phản hồi lỗi từ server đều tuân theo đúng cấu tr
 | **404** | `NOT_FOUND` | Hội thoại không tồn tại hoặc thuộc client khác. | Quay về màn hình danh sách hội thoại. |
 | **409** | `REQUEST_ID_CONFLICT` | Tái sử dụng `request_id` cũ nhưng đổi nội dung tin nhắn. | Sinh `request_id` mới khi gửi câu hỏi mới. |
 | **503** | `LLM_UNAVAILABLE` | Lỗi dịch vụ AI (không kết nối được AI). | Báo lỗi và cho phép người dùng bấm "Thử lại". |
+| **503** | `REQUEST_IN_PROGRESS` | Một request cùng `request_id` đang chạy quá thời gian chờ 35 giây trong tiến trình server. | Thử lại với cùng `request_id` và nội dung. |
+| **503** | `DATABASE_BUSY` | SQLite vẫn busy/locked sau tối đa 2 giây; có header `Retry-After: 1`. | Thử lại với cùng `request_id` và nội dung. |
 | **504** | `LLM_TIMEOUT` | Yêu cầu AI quá thời gian chờ (timeout). | Báo lỗi và cho phép người dùng bấm "Thử lại". |
 
 ---
@@ -213,13 +215,15 @@ def generate_reply(context: List[Dict[str, Any]], message: str) -> Tuple[str, st
         Trong đó:
         - reply_text: Chuỗi câu trả lời tiếng Việt từ LLM.
         - emotion: Chuỗi thuộc tập giá trị bắt buộc: {"neutral", "happy", "sad", "surprised"}.
-                   Nếu LLM trả về giá trị lạ hoặc thiếu, Member D chuẩn hóa về "neutral".
+                   Nếu LLM trả về giá trị lạ hoặc thiếu, backend cũng chuẩn hóa về "neutral".
 
     Exceptions cần ném ra (để backend trả về mã lỗi HTTP chuẩn):
         - Ném `LLMUnavailableException` khi lỗi API key, lỗi mạng, hoặc HTTP 5xx từ OpenAI (sẽ trả về HTTP 503).
         - Ném `LLMTimeoutException` khi quá thời gian chờ (ví dụ quá 30 giây) (sẽ trả về HTTP 504).
     """
 ```
+
+Backend từ chối câu trả lời AI rỗng, chỉ có khoảng trắng hoặc không phải chuỗi: HTTP 503 `LLM_UNAVAILABLE`, không lưu tin nhắn. Thành viên D vẫn nên kiểm tra đầu ra và ném `LLMUnavailableException` / `LLMTimeoutException` đúng trường hợp. Khóa theo `request_id` chỉ bảo vệ **một tiến trình**; bản demo dùng **một Uvicorn worker**. Không dùng nhiều worker hoặc nhiều tiến trình nếu cần bảo đảm chỉ gọi AI một lần cho retry đồng thời. SQLite vẫn chặn ghi trùng nhưng không chặn lời gọi AI trùng giữa các tiến trình. Thời gian UTC ISO 8601 `Z` hiện có phần microsecond.
 
 ### 4.3. Quản lý Khóa API & Biến môi trường
 - Tạo tệp `.env` tại thư mục `backend/` (đã được loại trừ bởi `.gitignore`, không bao giờ commit).
@@ -249,16 +253,15 @@ Hệ thống đã trải qua hai hình thức kiểm thử độc lập:
 9. `GET /api/v1/conversations/{id}/messages` sau khi xóa -> Trả về HTTP 404 Not Found.
 
 ### 5.2. Kiểm thử Tự động qua Pytest (Automated Test Suite)
-Toàn bộ **23/23 bài kiểm thử ĐẠT 100%**:
+Tại thời điểm bàn giao ban đầu, **23/23 bài kiểm thử ĐẠT**:
 - **12 bài kiểm thử Milestone 1 & 2 (`test_conversations.py`):** Kiểm tra health endpoint, CRUD hội thoại, sắp xếp giảm dần theo thời gian, cô lập tuyệt đối giữa các client, cascade xóa và lưu trữ bền vững sau khi mở lại SQLite.
 - **11 bài kiểm thử Milestone 3 (`test_messages.py`):** Kiểm tra gửi tin nhắn thành công, thứ tự tin nhắn xác định (user luôn trước assistant), truyền chính xác ngữ cảnh 10 tin nhắn gần nhất, tính lũy thỏa khi lặp lại request ID, xung đột khi đổi nội dung tin nhắn, xử lý đồng thời 2 luồng gần như cùng lúc, kiểm tra đầu vào không hợp lệ, mô phỏng AI lỗi/timeout không lưu dữ liệu dở dang và cascade xóa bản ghi idempotency.
+
+Sau code review ngày 03/10/2026: **39/39 bài kiểm thử ĐẠT** (16 ca mới trong `test_review_fixes.py`), gồm AI trả rỗng/sai kiểu, emotion lạ, retry đồng thời có đếm số lần gọi AI, chờ quá hạn, xóa chat khi AI đang chạy, thứ tự trong cùng giây, tương thích timestamp cũ và SQLite busy. Một luồng HTTP thật qua Uvicorn trên localhost với database tạm cũng đạt: health 200, tạo 200, gửi 200, retry 200 cùng cặp ID, đọc 200, xóa 204, đọc sau xóa 404.
 
 ---
 
 ## 6. Kết luận Rà soát Lỗi (Defect Review)
 
-- **Kết quả rà soát mã nguồn:**
-  - Logic gửi tin nhắn, giao dịch nguyên tử `with db:`, ràng buộc `PRIMARY KEY` trên `idempotency_records`, và các exception handler hoạt động chuẩn xác theo kế hoạch đề ra.
-  - Không có lỗi nghiêm trọng (blocking defects), không có hiện tượng rò rỉ transaction hoặc giữ write lock trong thời gian chờ AI.
-  - Cơ sở dữ liệu và mã nguồn sạch sẽ, không chứa thông tin nhạy cảm.
-- Backend của Thành viên C chính thức sẵn sàng chuyển giao cho Thành viên A và Thành viên D.
+- Code review độc lập đã phát hiện các lỗi về đầu ra AI, retry đồng thời, xóa chat khi AI đang chạy, thứ tự cùng giây và SQLite busy; các sửa đổi và bằng chứng kiểm thử được ghi trong `backend/reports/backend_review_fixes.md`.
+- Backend sẵn sàng ghép A/D cho bản demo **một tiến trình, một worker**. Thành viên D cần giữ timeout và ánh xạ lỗi AI theo interface; chưa xác minh với LLM thật hoặc điện thoại thật. Khóa in-memory không có hiệu lực qua nhiều tiến trình.
