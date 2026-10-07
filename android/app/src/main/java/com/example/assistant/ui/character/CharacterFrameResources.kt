@@ -219,7 +219,7 @@ object CharacterFrameCatalog {
     val idle = CharacterAnimationSpec(
         actionName = "idle",
         frames = idleFrames,
-        fps = 8,
+        fps = 6,
         mode = PlaybackMode.LOOP,
     )
 

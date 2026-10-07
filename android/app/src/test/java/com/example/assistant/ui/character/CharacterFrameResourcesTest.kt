@@ -61,8 +61,8 @@ class CharacterFrameResourcesTest {
 
     @Test
     fun testFpsAndDurationSpecifications() {
-        assertEquals(8, CharacterFrameCatalog.idle.fps)
-        assertEquals(125L, CharacterFrameCatalog.idle.frameDurationMs)
+        assertEquals(6, CharacterFrameCatalog.idle.fps)
+        assertEquals(166L, CharacterFrameCatalog.idle.frameDurationMs)
 
         assertEquals(8, CharacterFrameCatalog.thinking.fps)
         assertEquals(125L, CharacterFrameCatalog.thinking.frameDurationMs)

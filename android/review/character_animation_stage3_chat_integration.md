@@ -36,7 +36,7 @@ In `CharacterFrameResources.kt`, only the metadata FPS values were modified. No 
 
 | Action | Frames | Old FPS | **Stage 3 FPS** | Frame Duration | Playback Mode | Total Duration |
 |---|---|---|---|---|---|---|
-| `idle` | 32 | 16 | **8 FPS** | 125 ms | `LOOP` | 4000 ms (4.0s) |
+| `idle` | 32 | 16 | **6 FPS** | 166 ms | `LOOP` | 5312 ms (~5.3s) |
 | `thinking` | 30 | 16 | **8 FPS** | 125 ms | `LOOP` | 3750 ms (3.75s) |
 | `talk` | 19 | 18 | **10 FPS** | 100 ms | `LOOP` | 1900 ms (1.9s) |
 | `happy` | 15 | 15 | **10 FPS** | 100 ms | `ONE_SHOT` | 1500 ms (1.5s) |
@@ -212,7 +212,7 @@ When testing on a physical Android device connected to the FastAPI backend:
 
 1. **Idle State:**
    - Launch the application and enter the Chat screen.
-   - Verify the anime character plays the `idle` animation continuously at a calm 8 FPS (approx. 4.0s per cycle) without jitter.
+   - Verify the anime character plays the `idle` animation continuously at a calm 6 FPS (approx. 5.3s per cycle) without jitter.
 2. **Sending & Thinking State:**
    - Type a prompt and tap Send.
    - Verify the character immediately switches to `thinking` (8 FPS) with typing dots active while waiting for server response.

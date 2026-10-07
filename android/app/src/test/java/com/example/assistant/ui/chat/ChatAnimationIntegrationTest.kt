@@ -17,7 +17,7 @@ class ChatAnimationIntegrationTest {
 
     @Test
     fun testExactFpsValuesForStage3() {
-        assertEquals("idle must be 8 FPS", 8, CharacterFrameCatalog.idle.fps)
+        assertEquals("idle must be 6 FPS", 6, CharacterFrameCatalog.idle.fps)
         assertEquals("thinking must be 8 FPS", 8, CharacterFrameCatalog.thinking.fps)
         assertEquals("talk must be 10 FPS", 10, CharacterFrameCatalog.talk.fps)
         assertEquals("happy must be 10 FPS", 10, CharacterFrameCatalog.happy.fps)
@@ -27,9 +27,9 @@ class ChatAnimationIntegrationTest {
 
     @Test
     fun testTotalDurationsReflectNewFps() {
-        // idle: 32 frames @ 8 FPS -> 125ms * 32 = 4000ms
-        assertEquals(125L, CharacterFrameCatalog.idle.frameDurationMs)
-        assertEquals(4000L, CharacterFrameCatalog.idle.totalDurationMs)
+        // idle: 32 frames @ 6 FPS -> 166ms * 32 = 5312ms
+        assertEquals(166L, CharacterFrameCatalog.idle.frameDurationMs)
+        assertEquals(5312L, CharacterFrameCatalog.idle.totalDurationMs)
 
         // thinking: 30 frames @ 8 FPS -> 125ms * 30 = 3750ms
         assertEquals(125L, CharacterFrameCatalog.thinking.frameDurationMs)
