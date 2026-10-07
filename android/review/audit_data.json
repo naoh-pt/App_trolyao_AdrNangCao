@@ -1,0 +1,1591 @@
+{
+  "package_dir": "D:\\nam5\\semester_1\\advance_android\\01_trolyAI\\character_frames_original",
+  "actions_found": [
+    "idle",
+    "thinking",
+    "talk",
+    "happy",
+    "sad",
+    "surprised"
+  ],
+  "actions_missing": [],
+  "inventory": {
+    "idle": {
+      "png_count": 32,
+      "first_file": "character_idle_0001.png",
+      "last_file": "character_idle_0032.png",
+      "seq_start": 1,
+      "seq_end": 32,
+      "starts_at_zero": false,
+      "is_zero_padded": true,
+      "padding_length": 4,
+      "gaps": [],
+      "duplicate_filenames": [],
+      "non_png_files": [],
+      "subfolders": [],
+      "hidden_or_temp": [],
+      "total_bytes": 18856148,
+      "min_bytes": 580858,
+      "max_bytes": 599109,
+      "avg_bytes": 589254.625
+    },
+    "thinking": {
+      "png_count": 30,
+      "first_file": "character_thinking_0001.png",
+      "last_file": "character_thinking_0030.png",
+      "seq_start": 1,
+      "seq_end": 30,
+      "starts_at_zero": false,
+      "is_zero_padded": true,
+      "padding_length": 4,
+      "gaps": [],
+      "duplicate_filenames": [],
+      "non_png_files": [],
+      "subfolders": [],
+      "hidden_or_temp": [],
+      "total_bytes": 13559135,
+      "min_bytes": 425453,
+      "max_bytes": 466793,
+      "avg_bytes": 451971.1666666667
+    },
+    "talk": {
+      "png_count": 19,
+      "first_file": "character_talk_0001.png",
+      "last_file": "character_talk_0019.png",
+      "seq_start": 1,
+      "seq_end": 19,
+      "starts_at_zero": false,
+      "is_zero_padded": true,
+      "padding_length": 4,
+      "gaps": [],
+      "duplicate_filenames": [],
+      "non_png_files": [],
+      "subfolders": [],
+      "hidden_or_temp": [],
+      "total_bytes": 8938124,
+      "min_bytes": 460465,
+      "max_bytes": 477970,
+      "avg_bytes": 470427.5789473684
+    },
+    "happy": {
+      "png_count": 16,
+      "first_file": "character_happy_0001.png",
+      "last_file": "character_happy_0016.png",
+      "seq_start": 1,
+      "seq_end": 16,
+      "starts_at_zero": false,
+      "is_zero_padded": true,
+      "padding_length": 4,
+      "gaps": [],
+      "duplicate_filenames": [],
+      "non_png_files": [],
+      "subfolders": [],
+      "hidden_or_temp": [],
+      "total_bytes": 9654193,
+      "min_bytes": 591985,
+      "max_bytes": 612146,
+      "avg_bytes": 603387.0625
+    },
+    "sad": {
+      "png_count": 21,
+      "first_file": "character_sad_0001.png",
+      "last_file": "character_sad_0021.png",
+      "seq_start": 1,
+      "seq_end": 21,
+      "starts_at_zero": false,
+      "is_zero_padded": true,
+      "padding_length": 4,
+      "gaps": [],
+      "duplicate_filenames": [],
+      "non_png_files": [],
+      "subfolders": [],
+      "hidden_or_temp": [],
+      "total_bytes": 10368365,
+      "min_bytes": 451323,
+      "max_bytes": 626553,
+      "avg_bytes": 493731.6666666667
+    },
+    "surprised": {
+      "png_count": 23,
+      "first_file": "character_surprised_0001.png",
+      "last_file": "character_surprised_0023.png",
+      "seq_start": 1,
+      "seq_end": 23,
+      "starts_at_zero": false,
+      "is_zero_padded": true,
+      "padding_length": 4,
+      "gaps": [],
+      "duplicate_filenames": [],
+      "non_png_files": [],
+      "subfolders": [],
+      "hidden_or_temp": [],
+      "total_bytes": 18203740,
+      "min_bytes": 591985,
+      "max_bytes": 865124,
+      "avg_bytes": 791466.9565217391
+    }
+  },
+  "naming_validation": {
+    "idle": {
+      "issues_count": 0,
+      "issues": [],
+      "example_recommended": "character_idle_0001.png",
+      "mapping_status": "folder 'idle' -> application state IDLE"
+    },
+    "thinking": {
+      "issues_count": 0,
+      "issues": [],
+      "example_recommended": "character_thinking_0001.png",
+      "mapping_status": "folder 'thinking' -> application state THINKING"
+    },
+    "talk": {
+      "issues_count": 0,
+      "issues": [],
+      "example_recommended": "character_talk_0001.png",
+      "mapping_status": "folder 'talk' -> application state TALKING"
+    },
+    "happy": {
+      "issues_count": 0,
+      "issues": [],
+      "example_recommended": "character_happy_0001.png",
+      "mapping_status": "folder 'happy' -> application state HAPPY"
+    },
+    "sad": {
+      "issues_count": 0,
+      "issues": [],
+      "example_recommended": "character_sad_0001.png",
+      "mapping_status": "folder 'sad' -> application state SAD"
+    },
+    "surprised": {
+      "issues_count": 0,
+      "issues": [],
+      "example_recommended": "character_surprised_0001.png",
+      "mapping_status": "folder 'surprised' -> application state SURPRISED"
+    }
+  },
+  "png_validity": {
+    "idle": {
+      "all_png_signature": true,
+      "all_can_decode": true,
+      "color_modes": [
+        "RGBA"
+      ],
+      "has_alpha": true,
+      "fully_transparent_count": 0,
+      "fully_opaque_count": 0,
+      "avg_transparent_pct": 60.14,
+      "min_transparent_pct": 59.88340377807617,
+      "max_transparent_pct": 60.7670783996582,
+      "consecutive_identical_bytes": [
+        [
+          "character_idle_0005.png",
+          "character_idle_0006.png"
+        ],
+        [
+          "character_idle_0007.png",
+          "character_idle_0008.png"
+        ],
+        [
+          "character_idle_0008.png",
+          "character_idle_0009.png"
+        ],
+        [
+          "character_idle_0010.png",
+          "character_idle_0011.png"
+        ],
+        [
+          "character_idle_0012.png",
+          "character_idle_0013.png"
+        ],
+        [
+          "character_idle_0014.png",
+          "character_idle_0015.png"
+        ],
+        [
+          "character_idle_0019.png",
+          "character_idle_0020.png"
+        ],
+        [
+          "character_idle_0030.png",
+          "character_idle_0031.png"
+        ],
+        [
+          "character_idle_0031.png",
+          "character_idle_0032.png"
+        ]
+      ],
+      "consecutive_identical_pixels": [
+        [
+          "character_idle_0005.png",
+          "character_idle_0006.png"
+        ],
+        [
+          "character_idle_0007.png",
+          "character_idle_0008.png"
+        ],
+        [
+          "character_idle_0008.png",
+          "character_idle_0009.png"
+        ],
+        [
+          "character_idle_0010.png",
+          "character_idle_0011.png"
+        ],
+        [
+          "character_idle_0012.png",
+          "character_idle_0013.png"
+        ],
+        [
+          "character_idle_0014.png",
+          "character_idle_0015.png"
+        ],
+        [
+          "character_idle_0019.png",
+          "character_idle_0020.png"
+        ],
+        [
+          "character_idle_0030.png",
+          "character_idle_0031.png"
+        ],
+        [
+          "character_idle_0031.png",
+          "character_idle_0032.png"
+        ]
+      ]
+    },
+    "thinking": {
+      "all_png_signature": true,
+      "all_can_decode": true,
+      "color_modes": [
+        "RGBA"
+      ],
+      "has_alpha": true,
+      "fully_transparent_count": 0,
+      "fully_opaque_count": 0,
+      "avg_transparent_pct": 62.86,
+      "min_transparent_pct": 60.05287170410156,
+      "max_transparent_pct": 66.11003875732422,
+      "consecutive_identical_bytes": [
+        [
+          "character_thinking_0001.png",
+          "character_thinking_0002.png"
+        ],
+        [
+          "character_thinking_0003.png",
+          "character_thinking_0004.png"
+        ],
+        [
+          "character_thinking_0009.png",
+          "character_thinking_0010.png"
+        ],
+        [
+          "character_thinking_0024.png",
+          "character_thinking_0025.png"
+        ],
+        [
+          "character_thinking_0027.png",
+          "character_thinking_0028.png"
+        ],
+        [
+          "character_thinking_0029.png",
+          "character_thinking_0030.png"
+        ]
+      ],
+      "consecutive_identical_pixels": [
+        [
+          "character_thinking_0001.png",
+          "character_thinking_0002.png"
+        ],
+        [
+          "character_thinking_0003.png",
+          "character_thinking_0004.png"
+        ],
+        [
+          "character_thinking_0009.png",
+          "character_thinking_0010.png"
+        ],
+        [
+          "character_thinking_0024.png",
+          "character_thinking_0025.png"
+        ],
+        [
+          "character_thinking_0027.png",
+          "character_thinking_0028.png"
+        ],
+        [
+          "character_thinking_0029.png",
+          "character_thinking_0030.png"
+        ]
+      ]
+    },
+    "talk": {
+      "all_png_signature": true,
+      "all_can_decode": true,
+      "color_modes": [
+        "RGBA"
+      ],
+      "has_alpha": true,
+      "fully_transparent_count": 0,
+      "fully_opaque_count": 0,
+      "avg_transparent_pct": 69.62,
+      "min_transparent_pct": 69.2326545715332,
+      "max_transparent_pct": 70.01657485961914,
+      "consecutive_identical_bytes": [],
+      "consecutive_identical_pixels": []
+    },
+    "happy": {
+      "all_png_signature": true,
+      "all_can_decode": true,
+      "color_modes": [
+        "RGBA"
+      ],
+      "has_alpha": true,
+      "fully_transparent_count": 0,
+      "fully_opaque_count": 0,
+      "avg_transparent_pct": 60.16,
+      "min_transparent_pct": 59.92631912231445,
+      "max_transparent_pct": 60.74943542480469,
+      "consecutive_identical_bytes": [
+        [
+          "character_happy_0001.png",
+          "character_happy_0002.png"
+        ],
+        [
+          "character_happy_0005.png",
+          "character_happy_0006.png"
+        ],
+        [
+          "character_happy_0009.png",
+          "character_happy_0010.png"
+        ],
+        [
+          "character_happy_0010.png",
+          "character_happy_0011.png"
+        ],
+        [
+          "character_happy_0013.png",
+          "character_happy_0014.png"
+        ],
+        [
+          "character_happy_0014.png",
+          "character_happy_0015.png"
+        ]
+      ],
+      "consecutive_identical_pixels": [
+        [
+          "character_happy_0001.png",
+          "character_happy_0002.png"
+        ],
+        [
+          "character_happy_0005.png",
+          "character_happy_0006.png"
+        ],
+        [
+          "character_happy_0009.png",
+          "character_happy_0010.png"
+        ],
+        [
+          "character_happy_0010.png",
+          "character_happy_0011.png"
+        ],
+        [
+          "character_happy_0013.png",
+          "character_happy_0014.png"
+        ],
+        [
+          "character_happy_0014.png",
+          "character_happy_0015.png"
+        ]
+      ]
+    },
+    "sad": {
+      "all_png_signature": true,
+      "all_can_decode": true,
+      "color_modes": [
+        "RGBA"
+      ],
+      "has_alpha": true,
+      "fully_transparent_count": 0,
+      "fully_opaque_count": 0,
+      "avg_transparent_pct": 59.7,
+      "min_transparent_pct": 58.886051177978516,
+      "max_transparent_pct": 61.403846740722656,
+      "consecutive_identical_bytes": [
+        [
+          "character_sad_0014.png",
+          "character_sad_0015.png"
+        ],
+        [
+          "character_sad_0016.png",
+          "character_sad_0017.png"
+        ]
+      ],
+      "consecutive_identical_pixels": [
+        [
+          "character_sad_0014.png",
+          "character_sad_0015.png"
+        ],
+        [
+          "character_sad_0016.png",
+          "character_sad_0017.png"
+        ]
+      ]
+    },
+    "surprised": {
+      "all_png_signature": true,
+      "all_can_decode": true,
+      "color_modes": [
+        "RGBA"
+      ],
+      "has_alpha": true,
+      "fully_transparent_count": 0,
+      "fully_opaque_count": 0,
+      "avg_transparent_pct": 60.26,
+      "min_transparent_pct": 59.92631912231445,
+      "max_transparent_pct": 60.74943542480469,
+      "consecutive_identical_bytes": [
+        [
+          "character_surprised_0001.png",
+          "character_surprised_0002.png"
+        ],
+        [
+          "character_surprised_0003.png",
+          "character_surprised_0004.png"
+        ],
+        [
+          "character_surprised_0005.png",
+          "character_surprised_0006.png"
+        ],
+        [
+          "character_surprised_0008.png",
+          "character_surprised_0009.png"
+        ],
+        [
+          "character_surprised_0010.png",
+          "character_surprised_0011.png"
+        ],
+        [
+          "character_surprised_0012.png",
+          "character_surprised_0013.png"
+        ],
+        [
+          "character_surprised_0013.png",
+          "character_surprised_0014.png"
+        ],
+        [
+          "character_surprised_0014.png",
+          "character_surprised_0015.png"
+        ],
+        [
+          "character_surprised_0015.png",
+          "character_surprised_0016.png"
+        ],
+        [
+          "character_surprised_0017.png",
+          "character_surprised_0018.png"
+        ],
+        [
+          "character_surprised_0018.png",
+          "character_surprised_0019.png"
+        ],
+        [
+          "character_surprised_0020.png",
+          "character_surprised_0021.png"
+        ],
+        [
+          "character_surprised_0022.png",
+          "character_surprised_0023.png"
+        ]
+      ],
+      "consecutive_identical_pixels": [
+        [
+          "character_surprised_0001.png",
+          "character_surprised_0002.png"
+        ],
+        [
+          "character_surprised_0003.png",
+          "character_surprised_0004.png"
+        ],
+        [
+          "character_surprised_0005.png",
+          "character_surprised_0006.png"
+        ],
+        [
+          "character_surprised_0008.png",
+          "character_surprised_0009.png"
+        ],
+        [
+          "character_surprised_0010.png",
+          "character_surprised_0011.png"
+        ],
+        [
+          "character_surprised_0012.png",
+          "character_surprised_0013.png"
+        ],
+        [
+          "character_surprised_0013.png",
+          "character_surprised_0014.png"
+        ],
+        [
+          "character_surprised_0014.png",
+          "character_surprised_0015.png"
+        ],
+        [
+          "character_surprised_0015.png",
+          "character_surprised_0016.png"
+        ],
+        [
+          "character_surprised_0017.png",
+          "character_surprised_0018.png"
+        ],
+        [
+          "character_surprised_0018.png",
+          "character_surprised_0019.png"
+        ],
+        [
+          "character_surprised_0020.png",
+          "character_surprised_0021.png"
+        ],
+        [
+          "character_surprised_0022.png",
+          "character_surprised_0023.png"
+        ]
+      ]
+    }
+  },
+  "canvas_consistency": {
+    "idle": {
+      "unique_dimensions": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "dimension_count": 1,
+      "consistent": true
+    },
+    "thinking": {
+      "unique_dimensions": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "dimension_count": 1,
+      "consistent": true
+    },
+    "talk": {
+      "unique_dimensions": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "dimension_count": 1,
+      "consistent": true
+    },
+    "happy": {
+      "unique_dimensions": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "dimension_count": 1,
+      "consistent": true
+    },
+    "sad": {
+      "unique_dimensions": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "dimension_count": 1,
+      "consistent": true
+    },
+    "surprised": {
+      "unique_dimensions": [
+        [
+          1024,
+          1024
+        ]
+      ],
+      "dimension_count": 1,
+      "consistent": true
+    },
+    "all_unique_dimensions": [
+      [
+        1024,
+        1024
+      ]
+    ],
+    "globally_consistent": true
+  },
+  "alignment_and_jitter": {
+    "idle": {
+      "bbox_overall": {
+        "left": 213,
+        "top": 0,
+        "right": 810,
+        "bottom": 1022
+      },
+      "avg_content_width": 589.66,
+      "avg_content_height": 1015.06,
+      "edge_touching_frames": [
+        "character_idle_0010.png",
+        "character_idle_0011.png",
+        "character_idle_0017.png",
+        "character_idle_0018.png",
+        "character_idle_0019.png",
+        "character_idle_0020.png",
+        "character_idle_0029.png"
+      ],
+      "jitter_warning_count": 0,
+      "jitter_warnings": []
+    },
+    "thinking": {
+      "bbox_overall": {
+        "left": 222,
+        "top": 5,
+        "right": 817,
+        "bottom": 1023
+      },
+      "avg_content_width": 527.3,
+      "avg_content_height": 1015.67,
+      "edge_touching_frames": [
+        "character_thinking_0009.png",
+        "character_thinking_0010.png",
+        "character_thinking_0011.png",
+        "character_thinking_0018.png",
+        "character_thinking_0019.png",
+        "character_thinking_0020.png",
+        "character_thinking_0021.png",
+        "character_thinking_0023.png",
+        "character_thinking_0024.png",
+        "character_thinking_0025.png"
+      ],
+      "jitter_warning_count": 0,
+      "jitter_warnings": []
+    },
+    "talk": {
+      "bbox_overall": {
+        "left": 252,
+        "top": 133,
+        "right": 771,
+        "bottom": 1023
+      },
+      "avg_content_width": 510.11,
+      "avg_content_height": 889.47,
+      "edge_touching_frames": [
+        "character_talk_0001.png",
+        "character_talk_0002.png",
+        "character_talk_0003.png",
+        "character_talk_0004.png",
+        "character_talk_0005.png",
+        "character_talk_0006.png",
+        "character_talk_0007.png",
+        "character_talk_0008.png",
+        "character_talk_0009.png",
+        "character_talk_0010.png",
+        "character_talk_0011.png",
+        "character_talk_0012.png",
+        "character_talk_0013.png",
+        "character_talk_0014.png",
+        "character_talk_0015.png",
+        "character_talk_0016.png",
+        "character_talk_0017.png",
+        "character_talk_0018.png",
+        "character_talk_0019.png"
+      ],
+      "jitter_warning_count": 0,
+      "jitter_warnings": []
+    },
+    "happy": {
+      "bbox_overall": {
+        "left": 213,
+        "top": 5,
+        "right": 810,
+        "bottom": 1023
+      },
+      "avg_content_width": 592.06,
+      "avg_content_height": 1014.69,
+      "edge_touching_frames": [
+        "character_happy_0001.png",
+        "character_happy_0002.png",
+        "character_happy_0003.png",
+        "character_happy_0004.png",
+        "character_happy_0005.png",
+        "character_happy_0006.png",
+        "character_happy_0007.png",
+        "character_happy_0008.png",
+        "character_happy_0009.png",
+        "character_happy_0010.png",
+        "character_happy_0011.png",
+        "character_happy_0012.png",
+        "character_happy_0013.png",
+        "character_happy_0014.png",
+        "character_happy_0015.png",
+        "character_happy_0016.png"
+      ],
+      "jitter_warning_count": 0,
+      "jitter_warnings": []
+    },
+    "sad": {
+      "bbox_overall": {
+        "left": 216,
+        "top": 0,
+        "right": 850,
+        "bottom": 1023
+      },
+      "avg_content_width": 602.57,
+      "avg_content_height": 1022.9,
+      "edge_touching_frames": [
+        "character_sad_0001.png",
+        "character_sad_0002.png",
+        "character_sad_0003.png",
+        "character_sad_0004.png",
+        "character_sad_0005.png",
+        "character_sad_0006.png",
+        "character_sad_0007.png",
+        "character_sad_0008.png",
+        "character_sad_0009.png",
+        "character_sad_0010.png",
+        "character_sad_0011.png",
+        "character_sad_0012.png",
+        "character_sad_0013.png",
+        "character_sad_0014.png",
+        "character_sad_0015.png",
+        "character_sad_0016.png",
+        "character_sad_0017.png",
+        "character_sad_0018.png",
+        "character_sad_0019.png",
+        "character_sad_0020.png",
+        "character_sad_0021.png"
+      ],
+      "jitter_warning_count": 0,
+      "jitter_warnings": []
+    },
+    "surprised": {
+      "bbox_overall": {
+        "left": 213,
+        "top": 0,
+        "right": 814,
+        "bottom": 1023
+      },
+      "avg_content_width": 587.87,
+      "avg_content_height": 1014.7,
+      "edge_touching_frames": [
+        "character_surprised_0001.png",
+        "character_surprised_0002.png",
+        "character_surprised_0003.png",
+        "character_surprised_0004.png",
+        "character_surprised_0005.png",
+        "character_surprised_0006.png",
+        "character_surprised_0007.png",
+        "character_surprised_0008.png",
+        "character_surprised_0009.png",
+        "character_surprised_0010.png",
+        "character_surprised_0011.png",
+        "character_surprised_0012.png",
+        "character_surprised_0013.png",
+        "character_surprised_0014.png",
+        "character_surprised_0015.png",
+        "character_surprised_0016.png",
+        "character_surprised_0017.png",
+        "character_surprised_0018.png",
+        "character_surprised_0019.png",
+        "character_surprised_0020.png",
+        "character_surprised_0021.png",
+        "character_surprised_0022.png",
+        "character_surprised_0023.png"
+      ],
+      "jitter_warning_count": 0,
+      "jitter_warnings": []
+    }
+  },
+  "duplicates_and_suspicious": {
+    "global_exact_file_duplicates": {
+      "f86831c6ebdbeb8a34d06e50c4e6320d7fe47dc575edfda662db39dfcda44eaf": [
+        [
+          "idle",
+          "character_idle_0001.png"
+        ],
+        [
+          "idle",
+          "character_idle_0005.png"
+        ],
+        [
+          "idle",
+          "character_idle_0006.png"
+        ],
+        [
+          "idle",
+          "character_idle_0030.png"
+        ],
+        [
+          "idle",
+          "character_idle_0031.png"
+        ],
+        [
+          "idle",
+          "character_idle_0032.png"
+        ]
+      ],
+      "2114adfcb66d2238f7022ebbe950645d1bb4cf34b73eb9b53dafe0fa7fc6e341": [
+        [
+          "idle",
+          "character_idle_0002.png"
+        ],
+        [
+          "idle",
+          "character_idle_0014.png"
+        ],
+        [
+          "idle",
+          "character_idle_0015.png"
+        ]
+      ],
+      "3ef0cdb0309a50e632396219f7f57d51e68acf2c48d577cbe3fff3a999ef3be7": [
+        [
+          "idle",
+          "character_idle_0007.png"
+        ],
+        [
+          "idle",
+          "character_idle_0008.png"
+        ],
+        [
+          "idle",
+          "character_idle_0009.png"
+        ]
+      ],
+      "34fda78dc569c47a93b029f6ff584ef1aa7558952c6ed4e425aed28bffc72a9c": [
+        [
+          "idle",
+          "character_idle_0010.png"
+        ],
+        [
+          "idle",
+          "character_idle_0011.png"
+        ],
+        [
+          "idle",
+          "character_idle_0019.png"
+        ],
+        [
+          "idle",
+          "character_idle_0020.png"
+        ],
+        [
+          "idle",
+          "character_idle_0029.png"
+        ]
+      ],
+      "7a2b2201a4c095a7efeac4de9cedebe02cd3aa4cab207fe45656b1d4bf93dc46": [
+        [
+          "idle",
+          "character_idle_0012.png"
+        ],
+        [
+          "idle",
+          "character_idle_0013.png"
+        ]
+      ],
+      "2f1af8d8c7b27f4a47bead2179e89eb066a4106cc1818ef76bf5bcee3dd4d075": [
+        [
+          "thinking",
+          "character_thinking_0001.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0002.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0029.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0030.png"
+        ]
+      ],
+      "b8daaef32982430eef9751a12ffb57a1272295d8611e96e0190135a742ba69cf": [
+        [
+          "thinking",
+          "character_thinking_0003.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0004.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0027.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0028.png"
+        ]
+      ],
+      "d947c30780a85266e892af64126f8c0335011d299a57f29ee0594b9d913c6d59": [
+        [
+          "thinking",
+          "character_thinking_0005.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0026.png"
+        ]
+      ],
+      "d5c6d996baf957e25b908bf5c440b87d9f7ea6f665b7c8b9cefd4b2fafa95e74": [
+        [
+          "thinking",
+          "character_thinking_0009.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0010.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0024.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0025.png"
+        ]
+      ],
+      "6ddba054cdc626a76aaa240eacd8ece69d665e7e2974dce5b8b4c79d1a18897b": [
+        [
+          "thinking",
+          "character_thinking_0011.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0023.png"
+        ]
+      ],
+      "c902a413c46338295a26f29a578fb0bc5921a959b6234252b9b74ca76a535cce": [
+        [
+          "thinking",
+          "character_thinking_0012.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0022.png"
+        ]
+      ],
+      "08dd801a63ab199aaae9596edd1af1ee55899b9cf96377e5bcca9c9483f7de6a": [
+        [
+          "talk",
+          "character_talk_0001.png"
+        ],
+        [
+          "talk",
+          "character_talk_0019.png"
+        ]
+      ],
+      "9a02bda60298b4fb7e1b9910c80defde493b4855b1e2c25e31b78e76857287ee": [
+        [
+          "happy",
+          "character_happy_0001.png"
+        ],
+        [
+          "happy",
+          "character_happy_0002.png"
+        ],
+        [
+          "happy",
+          "character_happy_0013.png"
+        ],
+        [
+          "happy",
+          "character_happy_0014.png"
+        ],
+        [
+          "happy",
+          "character_happy_0015.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0001.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0002.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0022.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0023.png"
+        ]
+      ],
+      "bdc8e056ff61d1c1c529a81dd324fddb08f0a4009544bb585213c0389f8c2deb": [
+        [
+          "happy",
+          "character_happy_0005.png"
+        ],
+        [
+          "happy",
+          "character_happy_0006.png"
+        ]
+      ],
+      "6c7f6300cc66d5efea7c0f4e01eb819cdf7cb1af9819bab02238243b2263e389": [
+        [
+          "happy",
+          "character_happy_0007.png"
+        ],
+        [
+          "happy",
+          "character_happy_0012.png"
+        ],
+        [
+          "happy",
+          "character_happy_0016.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0020.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0021.png"
+        ]
+      ],
+      "281ace08940630c129d145f68f7e3fb968d0bad3247b13bfe2afbabd07cbcd65": [
+        [
+          "happy",
+          "character_happy_0009.png"
+        ],
+        [
+          "happy",
+          "character_happy_0010.png"
+        ],
+        [
+          "happy",
+          "character_happy_0011.png"
+        ]
+      ],
+      "16ef19c9c171b13bea8d3041524d235ba74cdc02c6070722a1e0f6aed643ebe1": [
+        [
+          "sad",
+          "character_sad_0009.png"
+        ],
+        [
+          "sad",
+          "character_sad_0016.png"
+        ],
+        [
+          "sad",
+          "character_sad_0017.png"
+        ]
+      ],
+      "4a12e7fbda347bc7bf0c9b8a1201be1443419f8e5a851f31ae6a14093b050e05": [
+        [
+          "sad",
+          "character_sad_0014.png"
+        ],
+        [
+          "sad",
+          "character_sad_0015.png"
+        ]
+      ],
+      "317a15a09be66c5c9ce61419cb154f1e4beb816ecbf02c3b1d8325bdce2f8490": [
+        [
+          "surprised",
+          "character_surprised_0003.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0004.png"
+        ]
+      ],
+      "8b27037ce06b26f2c0854fac93dd3dc42820901cc3fc4884bfdc1ff24b8ba28e": [
+        [
+          "surprised",
+          "character_surprised_0005.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0006.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0017.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0018.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0019.png"
+        ]
+      ],
+      "822215c83f1abee3399c60f727e32fdedbff16dbd7a6eca1722b59965a1bf555": [
+        [
+          "surprised",
+          "character_surprised_0007.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0012.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0013.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0014.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0015.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0016.png"
+        ]
+      ],
+      "07bf7fdc19d46c85d4f124726193b33ef1b81d6d1716cfadd6144394141b2046": [
+        [
+          "surprised",
+          "character_surprised_0008.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0009.png"
+        ]
+      ],
+      "00467d35c7872e11b8e639cba1dec4b20ecdd0b6b6dbe9911d3bc4a657c3a555": [
+        [
+          "surprised",
+          "character_surprised_0010.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0011.png"
+        ]
+      ]
+    },
+    "global_exact_pixel_duplicates": {
+      "f7e324580d431153791b3500c561d9d0fe557f8f128d701fda41f9f68f6da0af": [
+        [
+          "idle",
+          "character_idle_0001.png"
+        ],
+        [
+          "idle",
+          "character_idle_0005.png"
+        ],
+        [
+          "idle",
+          "character_idle_0006.png"
+        ],
+        [
+          "idle",
+          "character_idle_0030.png"
+        ],
+        [
+          "idle",
+          "character_idle_0031.png"
+        ],
+        [
+          "idle",
+          "character_idle_0032.png"
+        ]
+      ],
+      "86d2bfdeae1d3e274787286a024a2a2ab61a4620cfea80d2d78817bfe597fcd6": [
+        [
+          "idle",
+          "character_idle_0002.png"
+        ],
+        [
+          "idle",
+          "character_idle_0014.png"
+        ],
+        [
+          "idle",
+          "character_idle_0015.png"
+        ]
+      ],
+      "d340bd4b922898e2a537917dbf5ea80e3bbca1b607813533b95e3939dd42cc09": [
+        [
+          "idle",
+          "character_idle_0007.png"
+        ],
+        [
+          "idle",
+          "character_idle_0008.png"
+        ],
+        [
+          "idle",
+          "character_idle_0009.png"
+        ]
+      ],
+      "7228d6f37f60c87c09625f12be8f38b2a3fc49188c8449558a0eb36b10c782a6": [
+        [
+          "idle",
+          "character_idle_0010.png"
+        ],
+        [
+          "idle",
+          "character_idle_0011.png"
+        ],
+        [
+          "idle",
+          "character_idle_0019.png"
+        ],
+        [
+          "idle",
+          "character_idle_0020.png"
+        ],
+        [
+          "idle",
+          "character_idle_0029.png"
+        ]
+      ],
+      "8d524ec0dc5692797063f201c2e4b3c4e1a3daa3584776b7e252168221935488": [
+        [
+          "idle",
+          "character_idle_0012.png"
+        ],
+        [
+          "idle",
+          "character_idle_0013.png"
+        ]
+      ],
+      "0c7a5400b180a4d9a4a5d56b806a333c4bc53f5cbf61f966b1a1502cdaa32d75": [
+        [
+          "thinking",
+          "character_thinking_0001.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0002.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0029.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0030.png"
+        ]
+      ],
+      "844e6005908df44d2ad48a2c4a536a55af3f40d1ed8eb4c06c0dd176698e1adf": [
+        [
+          "thinking",
+          "character_thinking_0003.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0004.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0027.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0028.png"
+        ]
+      ],
+      "18a4d87e21eb83204b69f0138ef692fde631b325cd0c1a62476f8bbe15b86b95": [
+        [
+          "thinking",
+          "character_thinking_0005.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0026.png"
+        ]
+      ],
+      "e479625b7709e788f1a439e16eb42e89c94334e68eb4373f2b6579febcc0eb41": [
+        [
+          "thinking",
+          "character_thinking_0009.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0010.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0024.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0025.png"
+        ]
+      ],
+      "8066b4e03ace41f7c34004b611ffed32ef6f001987c16e5af49c615415ede81e": [
+        [
+          "thinking",
+          "character_thinking_0011.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0023.png"
+        ]
+      ],
+      "cbf0d8d54e87967b0a21d49562fe0e3bb4daf7539bf30f4766919cd5c78c2bbc": [
+        [
+          "thinking",
+          "character_thinking_0012.png"
+        ],
+        [
+          "thinking",
+          "character_thinking_0022.png"
+        ]
+      ],
+      "61454bcdafcded126943c082cda2494d1f18aa2b2205cd506f389a50ea5ada52": [
+        [
+          "talk",
+          "character_talk_0001.png"
+        ],
+        [
+          "talk",
+          "character_talk_0019.png"
+        ]
+      ],
+      "15d2843e31cf74a2df47561cc1aed140b7fb3bb0826720400fbcfdf06af26abd": [
+        [
+          "happy",
+          "character_happy_0001.png"
+        ],
+        [
+          "happy",
+          "character_happy_0002.png"
+        ],
+        [
+          "happy",
+          "character_happy_0013.png"
+        ],
+        [
+          "happy",
+          "character_happy_0014.png"
+        ],
+        [
+          "happy",
+          "character_happy_0015.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0001.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0002.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0022.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0023.png"
+        ]
+      ],
+      "060ba5df3c4c3521326e37b08921834f8859ef9ba3a5ecab584dfe832735d719": [
+        [
+          "happy",
+          "character_happy_0005.png"
+        ],
+        [
+          "happy",
+          "character_happy_0006.png"
+        ]
+      ],
+      "a8d416116d428299f2c72feac58e58b1d93825290773aa815865d9952e8d8f31": [
+        [
+          "happy",
+          "character_happy_0007.png"
+        ],
+        [
+          "happy",
+          "character_happy_0012.png"
+        ],
+        [
+          "happy",
+          "character_happy_0016.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0020.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0021.png"
+        ]
+      ],
+      "0f6db675f91a4ee011f67df6adfd955ec10752b31ef3d135ae4146c657b222a6": [
+        [
+          "happy",
+          "character_happy_0009.png"
+        ],
+        [
+          "happy",
+          "character_happy_0010.png"
+        ],
+        [
+          "happy",
+          "character_happy_0011.png"
+        ]
+      ],
+      "dce3c04bcd85724ad81d18fde933ca3a216d2cc792c4107885997af8f7a0ac1c": [
+        [
+          "sad",
+          "character_sad_0009.png"
+        ],
+        [
+          "sad",
+          "character_sad_0016.png"
+        ],
+        [
+          "sad",
+          "character_sad_0017.png"
+        ]
+      ],
+      "cf49f534e52aa1a95d54ca2694a997938aed8326c049b8864989aac6aebea03c": [
+        [
+          "sad",
+          "character_sad_0014.png"
+        ],
+        [
+          "sad",
+          "character_sad_0015.png"
+        ]
+      ],
+      "d05959df99bf68b0b4d4ceb0c3d0cfa848a7e9a097d02905a6c6f54d2cfca3f1": [
+        [
+          "surprised",
+          "character_surprised_0003.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0004.png"
+        ]
+      ],
+      "8d563ce0c3f164b5ed56db2c62b25bbc6308173ffb901fbcc9e8d85af469ff29": [
+        [
+          "surprised",
+          "character_surprised_0005.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0006.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0017.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0018.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0019.png"
+        ]
+      ],
+      "f042236e945a7e60c1b6e00b7eb91ef40e7a79298cdf3081de8ee239ced075d6": [
+        [
+          "surprised",
+          "character_surprised_0007.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0012.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0013.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0014.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0015.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0016.png"
+        ]
+      ],
+      "6635100c0b5d38100928d85b86235c5baae1ca77a93da802bc2510cfa9c57423": [
+        [
+          "surprised",
+          "character_surprised_0008.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0009.png"
+        ]
+      ],
+      "cead00fa0742bc8fd0aef89a65b0be28f9b90b1f71249717225117241e9acdaa": [
+        [
+          "surprised",
+          "character_surprised_0010.png"
+        ],
+        [
+          "surprised",
+          "character_surprised_0011.png"
+        ]
+      ]
+    }
+  },
+  "performance_and_memory": {
+    "idle": {
+      "compressed_bytes": 18856148,
+      "decoded_per_frame_bytes": 4194304,
+      "action_simultaneous_decoded_bytes": 134217728,
+      "frame_count": 32
+    },
+    "thinking": {
+      "compressed_bytes": 13559135,
+      "decoded_per_frame_bytes": 4194304,
+      "action_simultaneous_decoded_bytes": 125829120,
+      "frame_count": 30
+    },
+    "talk": {
+      "compressed_bytes": 8938124,
+      "decoded_per_frame_bytes": 4194304,
+      "action_simultaneous_decoded_bytes": 79691776,
+      "frame_count": 19
+    },
+    "happy": {
+      "compressed_bytes": 9654193,
+      "decoded_per_frame_bytes": 4194304,
+      "action_simultaneous_decoded_bytes": 67108864,
+      "frame_count": 16
+    },
+    "sad": {
+      "compressed_bytes": 10368365,
+      "decoded_per_frame_bytes": 4194304,
+      "action_simultaneous_decoded_bytes": 88080384,
+      "frame_count": 21
+    },
+    "surprised": {
+      "compressed_bytes": 18203740,
+      "decoded_per_frame_bytes": 4194304,
+      "action_simultaneous_decoded_bytes": 96468992,
+      "frame_count": 23
+    },
+    "full_package": {
+      "total_frames": 141,
+      "total_compressed_bytes": 79579705,
+      "decoded_per_frame_bytes": 4194304,
+      "full_package_simultaneous_decoded_bytes": 591396864,
+      "risk_classification": "CRITICAL"
+    }
+  },
+  "summary": {}
+}
