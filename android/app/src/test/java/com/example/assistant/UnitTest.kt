@@ -34,10 +34,16 @@ class UnitTest {
         assertEquals(Emotion.HAPPY, Emotion.from("happy"))
         assertEquals(Emotion.HAPPY, Emotion.from(" HAPPY "))
         assertEquals(Emotion.SAD, Emotion.from("sad"))
+        assertEquals(Emotion.SAD, Emotion.from(" SAD "))
         assertEquals(Emotion.SURPRISED, Emotion.from("surprised"))
+        assertEquals(Emotion.SURPRISED, Emotion.from(" SURPRISED "))
+        assertEquals(Emotion.NEUTRAL, Emotion.from("neutral"))
+        assertEquals(Emotion.NEUTRAL, Emotion.from(" NEUTRAL "))
         assertEquals(Emotion.NEUTRAL, Emotion.from("unknown"))
+        assertEquals(Emotion.NEUTRAL, Emotion.from("angry"))
         assertEquals(Emotion.NEUTRAL, Emotion.from(null))
         assertEquals(Emotion.NEUTRAL, Emotion.from(""))
+        assertEquals(Emotion.NEUTRAL, Emotion.from("   "))
     }
 
     @Test

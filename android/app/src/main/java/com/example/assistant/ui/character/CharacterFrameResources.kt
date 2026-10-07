@@ -219,42 +219,42 @@ object CharacterFrameCatalog {
     val idle = CharacterAnimationSpec(
         actionName = "idle",
         frames = idleFrames,
-        fps = 16,
+        fps = 8,
         mode = PlaybackMode.LOOP,
     )
 
     val thinking = CharacterAnimationSpec(
         actionName = "thinking",
         frames = thinkingFrames,
-        fps = 16,
+        fps = 8,
         mode = PlaybackMode.LOOP,
     )
 
     val talk = CharacterAnimationSpec(
         actionName = "talk",
         frames = talkFrames,
-        fps = 18,
+        fps = 10,
         mode = PlaybackMode.LOOP,
     )
 
     val happy = CharacterAnimationSpec(
         actionName = "happy",
         frames = happyFrames,
-        fps = 15,
+        fps = 10,
         mode = PlaybackMode.ONE_SHOT,
     )
 
     val sad = CharacterAnimationSpec(
         actionName = "sad",
         frames = sadFrames,
-        fps = 14,
+        fps = 8,
         mode = PlaybackMode.ONE_SHOT,
     )
 
     val surprised = CharacterAnimationSpec(
         actionName = "surprised",
         frames = surprisedFrames,
-        fps = 16,
+        fps = 10,
         mode = PlaybackMode.ONE_SHOT,
     )
 

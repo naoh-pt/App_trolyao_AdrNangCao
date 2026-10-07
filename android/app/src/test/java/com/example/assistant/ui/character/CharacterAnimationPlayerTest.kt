@@ -76,7 +76,7 @@ class CharacterAnimationPlayerTest {
 
     @Test
     fun testFrameIndexBoundaryTransitions() {
-        val spec = CharacterFrameCatalog.idle // fps=16, frameDuration=62ms
+        val spec = CharacterFrameCatalog.idle // fps=8, frameDuration=125ms
         val duration = spec.frameDurationMs
 
         assertEquals(0, frameIndexForElapsed(0L, spec))

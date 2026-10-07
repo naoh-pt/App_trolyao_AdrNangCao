@@ -108,6 +108,7 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onHistory: () -> Unit) {
                     state = ui.characterState,
                     emotion = ui.emotion,
                     modifier = Modifier.fillMaxWidth().height(if (imeVisible) 80.dp else 210.dp),
+                    onOneShotFinished = vm::onCharacterAnimationFinished,
                 )
 
                 if (!ui.online) {

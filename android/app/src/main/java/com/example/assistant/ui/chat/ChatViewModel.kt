@@ -38,6 +38,27 @@ data class ChatUiState(
     val online: Boolean = true,
 )
 
+/**
+ * Pure transition logic determining whether an animation completion callback should transition
+ * state from TALKING to IDLE.
+ *
+ * Only active emotional one-shot states (TALKING with HAPPY, SAD, or SURPRISED) are handled.
+ * Returns false if the state is not TALKING or if the emotion is NEUTRAL.
+ */
+fun canHandleAnimationFinished(state: CharacterState, emotion: Emotion): Boolean =
+    state == CharacterState.TALKING && emotion != Emotion.NEUTRAL
+
+/**
+ * Pure state reducer transitioning from an emotional one-shot TALKING state back to IDLE + NEUTRAL.
+ * If the current state does not qualify, returns the state unchanged.
+ */
+fun ChatUiState.reduceAnimationFinished(): ChatUiState =
+    if (canHandleAnimationFinished(characterState, emotion)) {
+        copy(characterState = CharacterState.IDLE, emotion = Emotion.NEUTRAL)
+    } else {
+        this
+    }
+
 class ChatViewModel(
     private val repo: ChatRepository,
     initialConversationId: String?,
@@ -101,6 +122,7 @@ class ChatViewModel(
         val rid = if (s.pending == null) UUID.randomUUID().toString().also { requestId = it } else requestId ?: UUID.randomUUID().toString().also { requestId = it }
 
         talkJob?.cancel()
+        talkJob = null
         _ui.update {
             it.copy(
                 pending = text,
@@ -108,6 +130,7 @@ class ChatViewModel(
                 error = null,
                 sending = true,
                 characterState = CharacterState.THINKING,
+                emotion = Emotion.NEUTRAL,
             )
         }
 
@@ -125,18 +148,32 @@ class ChatViewModel(
             repo.sendMessage(id, rid, text).fold(
                 onSuccess = { reply ->
                     requestId = null
+                    val emotion = Emotion.from(reply.emotion)
+                    talkJob?.cancel()
+                    talkJob = null
                     _ui.update {
                         it.copy(
                             pending = null,
                             sending = false,
                             error = null,
-                            emotion = Emotion.from(reply.emotion),
                             characterState = CharacterState.TALKING,
+                            emotion = emotion,
                         )
                     }
-                    talkJob = viewModelScope.launch {
-                        delay(TALKING_MS)
-                        _ui.update { it.copy(characterState = CharacterState.IDLE) }
+                    if (emotion == Emotion.NEUTRAL) {
+                        talkJob = viewModelScope.launch {
+                            delay(TALKING_MS)
+                            _ui.update { current ->
+                                if (current.characterState == CharacterState.TALKING && current.emotion == Emotion.NEUTRAL) {
+                                    current.copy(
+                                        characterState = CharacterState.IDLE,
+                                        emotion = Emotion.NEUTRAL,
+                                    )
+                                } else {
+                                    current
+                                }
+                            }
+                        }
                     }
                 },
                 onFailure = { fail(it) },
@@ -144,11 +181,28 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Callback invoked when a one-shot emotional animation finishes playback.
+     * Transitions character back to IDLE + NEUTRAL only if currently in an emotional TALKING state.
+     */
+    fun onCharacterAnimationFinished() {
+        val s = _ui.value
+        if (!canHandleAnimationFinished(s.characterState, s.emotion)) {
+            return
+        }
+        talkJob?.cancel()
+        talkJob = null
+        _ui.update { it.reduceAnimationFinished() }
+    }
+
     private fun fail(e: Throwable?) {
+        talkJob?.cancel()
+        talkJob = null
         _ui.update {
             it.copy(
                 sending = false,
                 characterState = CharacterState.IDLE,
+                emotion = Emotion.NEUTRAL,
                 error = e?.message ?: "Đã có lỗi xảy ra",
             )
         }
@@ -163,6 +217,7 @@ class ChatViewModel(
     fun newChat() {
         if (_ui.value.sending) return
         talkJob?.cancel()
+        talkJob = null
         requestId = null
         conversationId.value = null
         _ui.value = ChatUiState()

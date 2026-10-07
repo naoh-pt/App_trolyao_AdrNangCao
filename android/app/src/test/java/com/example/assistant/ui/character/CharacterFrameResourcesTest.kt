@@ -61,23 +61,23 @@ class CharacterFrameResourcesTest {
 
     @Test
     fun testFpsAndDurationSpecifications() {
-        assertEquals(16, CharacterFrameCatalog.idle.fps)
-        assertEquals(62L, CharacterFrameCatalog.idle.frameDurationMs)
+        assertEquals(8, CharacterFrameCatalog.idle.fps)
+        assertEquals(125L, CharacterFrameCatalog.idle.frameDurationMs)
 
-        assertEquals(16, CharacterFrameCatalog.thinking.fps)
-        assertEquals(62L, CharacterFrameCatalog.thinking.frameDurationMs)
+        assertEquals(8, CharacterFrameCatalog.thinking.fps)
+        assertEquals(125L, CharacterFrameCatalog.thinking.frameDurationMs)
 
-        assertEquals(18, CharacterFrameCatalog.talk.fps)
-        assertEquals(55L, CharacterFrameCatalog.talk.frameDurationMs)
+        assertEquals(10, CharacterFrameCatalog.talk.fps)
+        assertEquals(100L, CharacterFrameCatalog.talk.frameDurationMs)
 
-        assertEquals(15, CharacterFrameCatalog.happy.fps)
-        assertEquals(66L, CharacterFrameCatalog.happy.frameDurationMs)
+        assertEquals(10, CharacterFrameCatalog.happy.fps)
+        assertEquals(100L, CharacterFrameCatalog.happy.frameDurationMs)
 
-        assertEquals(14, CharacterFrameCatalog.sad.fps)
-        assertEquals(71L, CharacterFrameCatalog.sad.frameDurationMs)
+        assertEquals(8, CharacterFrameCatalog.sad.fps)
+        assertEquals(125L, CharacterFrameCatalog.sad.frameDurationMs)
 
-        assertEquals(16, CharacterFrameCatalog.surprised.fps)
-        assertEquals(62L, CharacterFrameCatalog.surprised.frameDurationMs)
+        assertEquals(10, CharacterFrameCatalog.surprised.fps)
+        assertEquals(100L, CharacterFrameCatalog.surprised.frameDurationMs)
     }
 
     @Test
