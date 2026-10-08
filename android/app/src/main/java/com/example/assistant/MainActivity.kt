@@ -5,12 +5,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.assistant.domain.AnimationFpsSettings
+import com.example.assistant.domain.LocalAnimationFpsSettings
 import com.example.assistant.ui.chat.ChatScreen
 import com.example.assistant.ui.chat.ChatViewModel
 import com.example.assistant.ui.history.HistoryScreen
@@ -33,7 +38,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { AssistantTheme { AppNav() } }
+        val settingsStore = (application as AssistantApp).container.settings
+        setContent {
+            val fpsSettings by settingsStore.animationFpsSettings.collectAsStateWithLifecycle(
+                initialValue = AnimationFpsSettings.DEFAULT,
+            )
+            CompositionLocalProvider(LocalAnimationFpsSettings provides fpsSettings) {
+                AssistantTheme { AppNav() }
+            }
+        }
     }
 }
 

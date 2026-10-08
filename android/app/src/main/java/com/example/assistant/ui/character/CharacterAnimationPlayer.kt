@@ -98,6 +98,7 @@ fun isAnimationFinished(
  * @param spec Animation specification containing frames, fps, and playback mode.
  * @param modifier Modifier applied to the rendered image.
  * @param contentDescription Optional accessibility description (defaults to null for decorative character).
+ * @param restartKey Optional key whose change explicitly restarts the animation from frame 0.
  * @param onOneShotFinished Callback invoked exactly once upon completion of a one-shot animation.
  */
 @Composable
@@ -105,14 +106,15 @@ fun CharacterAnimationPlayer(
     spec: CharacterAnimationSpec,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
+    restartKey: Any? = null,
     onOneShotFinished: () -> Unit = {},
 ) {
     val currentOnFinished by rememberUpdatedState(onOneShotFinished)
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    var currentFrameIndex by remember(spec) { mutableIntStateOf(0) }
+    var currentFrameIndex by remember(spec, restartKey) { mutableIntStateOf(0) }
 
-    LaunchedEffect(spec, lifecycleOwner) {
+    LaunchedEffect(spec, restartKey, lifecycleOwner) {
         if (spec.frames.isEmpty()) return@LaunchedEffect
 
         var accumulatedElapsedNanos = 0L

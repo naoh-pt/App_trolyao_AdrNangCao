@@ -2,6 +2,7 @@ package com.example.assistant.ui.character
 
 import androidx.annotation.DrawableRes
 import com.example.assistant.R
+import com.example.assistant.domain.AnimationFpsSettings
 
 /**
  * Playback mode for character frame animation.
@@ -217,48 +218,61 @@ val surprisedFrames = intArrayOf(
  */
 object CharacterFrameCatalog {
     val idle = CharacterAnimationSpec(
-        actionName = "idle",
+        actionName = AnimationFpsSettings.ACTION_IDLE,
         frames = idleFrames,
-        fps = 5,
+        fps = AnimationFpsSettings.DEFAULT_IDLE_FPS,
         mode = PlaybackMode.LOOP,
     )
 
     val thinking = CharacterAnimationSpec(
-        actionName = "thinking",
+        actionName = AnimationFpsSettings.ACTION_THINKING,
         frames = thinkingFrames,
-        fps = 8,
+        fps = AnimationFpsSettings.DEFAULT_THINKING_FPS,
         mode = PlaybackMode.LOOP,
     )
 
     val talk = CharacterAnimationSpec(
-        actionName = "talk",
+        actionName = AnimationFpsSettings.ACTION_TALK,
         frames = talkFrames,
-        fps = 10,
+        fps = AnimationFpsSettings.DEFAULT_TALK_FPS,
         mode = PlaybackMode.LOOP,
     )
 
     val happy = CharacterAnimationSpec(
-        actionName = "happy",
+        actionName = AnimationFpsSettings.ACTION_HAPPY,
         frames = happyFrames,
-        fps = 10,
+        fps = AnimationFpsSettings.DEFAULT_HAPPY_FPS,
         mode = PlaybackMode.ONE_SHOT,
     )
 
     val sad = CharacterAnimationSpec(
-        actionName = "sad",
+        actionName = AnimationFpsSettings.ACTION_SAD,
         frames = sadFrames,
-        fps = 8,
+        fps = AnimationFpsSettings.DEFAULT_SAD_FPS,
         mode = PlaybackMode.ONE_SHOT,
     )
 
     val surprised = CharacterAnimationSpec(
-        actionName = "surprised",
+        actionName = AnimationFpsSettings.ACTION_SURPRISED,
         frames = surprisedFrames,
-        fps = 10,
+        fps = AnimationFpsSettings.DEFAULT_SURPRISED_FPS,
         mode = PlaybackMode.ONE_SHOT,
     )
 
     val allSpecs = listOf(idle, thinking, talk, happy, sad, surprised)
 
     val totalFrameCount: Int = allSpecs.sumOf { it.frames.size }
+
+    /**
+     * Look up a base spec by its action name string (e.g. "idle", "thinking", "talk").
+     */
+    fun specForAction(actionName: String): CharacterAnimationSpec = when (actionName) {
+        AnimationFpsSettings.ACTION_IDLE -> idle
+        AnimationFpsSettings.ACTION_THINKING -> thinking
+        AnimationFpsSettings.ACTION_TALK -> talk
+        AnimationFpsSettings.ACTION_HAPPY -> happy
+        AnimationFpsSettings.ACTION_SAD -> sad
+        AnimationFpsSettings.ACTION_SURPRISED -> surprised
+        else -> idle
+    }
 }

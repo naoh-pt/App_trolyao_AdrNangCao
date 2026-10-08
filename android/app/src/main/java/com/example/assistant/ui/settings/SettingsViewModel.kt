@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.assistant.assistantApp
 import com.example.assistant.data.local.SettingsStore
 import com.example.assistant.data.repo.ChatRepository
+import com.example.assistant.domain.AnimationFpsSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +20,9 @@ data class SettingsUiState(
     val status: String? = null,
     val statusOk: Boolean = false,
     val busy: Boolean = false,
+    val fpsSettings: AnimationFpsSettings = AnimationFpsSettings.DEFAULT,
+    val selectedPreviewAction: String = AnimationFpsSettings.ACTION_IDLE,
+    val replayKey: Long = 0L,
 )
 
 class SettingsViewModel(
@@ -32,6 +36,43 @@ class SettingsViewModel(
         viewModelScope.launch {
             val saved = settings.baseUrl.first()
             _ui.update { s -> if (s.url.isEmpty()) s.copy(url = saved) else s }
+        }
+        viewModelScope.launch {
+            settings.animationFpsSettings.collect { fps ->
+                _ui.update { s -> s.copy(fpsSettings = fps) }
+            }
+        }
+    }
+
+    fun selectPreviewAction(actionName: String) {
+        if (AnimationFpsSettings.ALL_ACTIONS.contains(actionName)) {
+            _ui.update { it.copy(selectedPreviewAction = actionName, replayKey = it.replayKey + 1) }
+        }
+    }
+
+    fun replayPreview() {
+        _ui.update { it.copy(replayKey = it.replayKey + 1) }
+    }
+
+    fun decreaseFps(actionName: String) {
+        val current = _ui.value.fpsSettings.fpsFor(actionName)
+        if (current <= AnimationFpsSettings.MIN_FPS) return
+        viewModelScope.launch {
+            settings.adjustFps(actionName, -1)
+        }
+    }
+
+    fun increaseFps(actionName: String) {
+        val current = _ui.value.fpsSettings.fpsFor(actionName)
+        if (current >= AnimationFpsSettings.MAX_FPS) return
+        viewModelScope.launch {
+            settings.adjustFps(actionName, 1)
+        }
+    }
+
+    fun restoreDefaultFps() {
+        viewModelScope.launch {
+            settings.resetFpsToDefaults()
         }
     }
 
