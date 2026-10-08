@@ -23,6 +23,8 @@ from app.schemas.conversation import (
     SendMessageRequest,
     SendMessageResponse,
 )
+import ai_service
+from app.config import USE_REAL_AI
 import app.services.mock_ai as mock_ai
 from app.services.request_guard import own_request
 from app.utils.time import utc_now_iso
@@ -276,7 +278,10 @@ def send_message(
             {"role": row["role"], "text": row["text"], "emotion": row["emotion"]}
             for row in rows
         ]
-        result = mock_ai.generate_reply(context, normalized_msg)
+        if USE_REAL_AI:
+            result = ai_service.generate_reply(context, normalized_msg)
+        else:
+            result = mock_ai.generate_reply(context, normalized_msg)
         if not isinstance(result, (tuple, list)) or len(result) != 2:
             raise InvalidAIReplyException()
         reply_text, reply_emotion = result
