@@ -1,13 +1,20 @@
-import os
 import json
-import time
+import logging
 from typing import List, Dict, Tuple
-from openai import OpenAI
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+# Sử dụng SDK chính thức của Google thay cho OpenAI
+from google import genai
+from google.genai import types
 
-client = OpenAI(api_key=OPENAI_API_KEY, timeout=30.0) if OPENAI_API_KEY else None
+from app.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_TIMEOUT_MS
+from app.exceptions import LLMUnavailableException, LLMTimeoutException
+
+# Only create a Google GenAI client when a Gemini key is configured.
+client = genai.Client(
+    api_key=GEMINI_API_KEY,
+    http_options=types.HttpOptions(api_version="v1", timeout=GEMINI_TIMEOUT_MS),
+) if GEMINI_API_KEY else None
+
 ALLOWED_EMOTIONS = ["neutral", "happy", "sad", "surprised"]
 
 SYSTEM_PROMPT = """Bạn là một trợ lý ảo trên điện thoại Android, có hình dáng một nhân vật anime.
@@ -20,36 +27,55 @@ Phản hồi của bạn BẮT BUỘC phải là một JSON hợp lệ với 2 t
 
 def generate_reply(context: List[Dict[str, str]], message: str) -> Tuple[str, str]:
     if not client:
-        time.sleep(1)
-        print("[AI Service] CẢNH BÁO: Đang chạy Mock AI vì không tìm thấy OPENAI_API_KEY.")
-        return "Xin chào, đây là tin nhắn từ chế độ Mock AI.", "happy"
+        raise LLMUnavailableException("Chưa cấu hình API Key cho LLM.")
 
     try:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        # 1. Chuyển đổi lịch sử chat (context) sang định dạng của Google GenAI
+        contents = []
         for msg in context:
-            messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-        messages.append({"role": "user", "content": message})
+            # Map role: Backend lưu là 'assistant', nhưng Google quy định là 'model'
+            role = "model" if msg.get("role") == "assistant" else "user"
+            contents.append(
+                types.Content(role=role, parts=[types.Part.from_text(text=msg.get("text", ""))])
+            )
 
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=messages,
-            response_format={ "type": "json_object" }, 
-            timeout=30.0
+        # 2. Thêm tin nhắn hiện tại của người dùng vào cuối
+        contents.append(
+            types.Content(role="user", parts=[types.Part.from_text(text=message)])
         )
 
-        result_json = json.loads(response.choices[0].message.content)
-        reply = result_json.get("reply", "Tôi không có câu trả lời.")
-        emotion = result_json.get("emotion", "neutral").lower()
+        # 3. Gọi API với cấu hình ép kiểu trả về JSON và truyền System Prompt
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                response_mime_type="application/json",
+            )
+        )
 
-        if emotion not in ALLOWED_EMOTIONS:
+        # 4. Parse kết quả trả về
+        result_json = json.loads(response.text)
+        reply = result_json.get("reply")
+
+        # Bắt buộc phải có reply hợp lệ, nếu không thì báo lỗi hệ thống
+        if not reply or not isinstance(reply, str) or not reply.strip():
+            raise LLMUnavailableException("LLM trả về câu trả lời rỗng hoặc không hợp lệ.")
+
+        emotion = result_json.get("emotion")
+        if not isinstance(emotion, str) or emotion.lower() not in ALLOWED_EMOTIONS:
             emotion = "neutral"
 
-        return reply, emotion
+        return reply.strip(), emotion.lower()
 
+    except json.JSONDecodeError:
+        logging.error("[AI Service Error] Malformed JSON response.")
+        raise LLMUnavailableException("Dữ liệu LLM trả về không đúng định dạng.")
     except Exception as e:
-        print(f"[AI Service Error] Lỗi kết nối LLM: {str(e)}")
-        raise Exception("LLM_UNAVAILABLE")
-
-if __name__ == "__main__":
-    r, e = generate_reply([], "Xin chào!")
-    print(f"Reply: {r}\nEmotion: {e}")
+        error_msg = str(e).lower()
+        if "timeout" in error_msg or "timed out" in error_msg:
+            logging.error("[AI Service Error] Request timed out.")
+            raise LLMTimeoutException("Không thể kết nối AI do quá thời gian.")
+        else:
+            logging.error(f"[AI Service Error] API failed: {str(e)}")
+            raise LLMUnavailableException("Không thể kết nối AI.")

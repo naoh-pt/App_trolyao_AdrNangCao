@@ -209,3 +209,26 @@ curl.exe -i -X DELETE "http://127.0.0.1:8000/api/v1/conversations/$convId" `
 
 ### 7. Swagger UI
 - Truy cập trình duyệt: `http://localhost:8000/docs`
+
+## Cấu hình Gemini
+
+Để sử dụng Gemini thay vì Mock AI, tại thư mục `backend`:
+
+1. Copy `.env.example` thành `.env` (không commit file `.env`).
+2. Điền Gemini API key và bật AI thật:
+
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key
+   GEMINI_MODEL=gemini-3.5-flash
+   GEMINI_TIMEOUT_MS=60000
+   USE_REAL_AI=true
+   ```
+
+3. Cài/cập nhật dependency rồi chạy server:
+
+   ```powershell
+   .\my_venv\Scripts\python.exe -m pip install -r requirements.txt
+   .\my_venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+`app.config` tự nạp `backend/.env`, kể cả khi Uvicorn chạy với `--reload`. Để dùng Mock AI cho demo/test, đặt `USE_REAL_AI=false` rồi khởi động lại server.
