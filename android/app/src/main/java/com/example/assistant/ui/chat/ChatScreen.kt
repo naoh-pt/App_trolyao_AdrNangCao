@@ -5,12 +5,16 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -56,6 +61,23 @@ import com.example.assistant.ui.components.CuteBackground
 
 private val UserShape = RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
 private val BotShape = RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp)
+private val ChatPanelShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
+/** Fixed character display height for phone layout (preserving full-body aspect ratio). */
+private val CharacterDisplayHeight = 360.dp
+
+/** Fractional height of the foreground chat panel when keyboard is closed (~50-55%). */
+private const val ChatPanelClosedFraction = 0.53f
+
+/** Fractional height of the foreground chat panel when keyboard is open (1.25x closed height = 66.25%). */
+private const val ChatPanelKeyboardFraction = ChatPanelClosedFraction * 1.25f
+
+/** Soft anime-style frosted vertical gradient (light blue/white, 60% -> 82% -> 95% opacity). */
+private val FrostedPanelGradient = Brush.verticalGradient(
+    0.0f to Color(0xFFEAF3FC).copy(alpha = 0.60f),
+    0.40f to Color(0xFFF2F7FD).copy(alpha = 0.82f),
+    1.0f to Color(0xFFF9FBFE).copy(alpha = 0.95f),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +86,7 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onHistory: () -> Unit) {
     val messages by vm.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val panelFraction = if (imeVisible) ChatPanelKeyboardFraction else ChatPanelClosedFraction
     val pending = ui.pending
     val error = ui.error
 
@@ -71,7 +94,7 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onHistory: () -> Unit) {
         (if (pending != null) 1 else 0) +
         (if (ui.sending) 1 else 0) +
         (if (error != null) 1 else 0)
-    LaunchedEffect(itemCount) {
+    LaunchedEffect(itemCount, imeVisible) {
         if (itemCount > 0) listState.animateScrollToItem(itemCount - 1)
     }
 
@@ -96,97 +119,128 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onHistory: () -> Unit) {
                 )
             },
         ) { padding ->
-            Column(
-                Modifier
+            Box(
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .consumeWindowInsets(padding)
-                    .imePadding(),
+                    .consumeWindowInsets(padding),
             ) {
-                // Thu nhỏ nhân vật khi bàn phím mở để ô nhập luôn thấy được.
+                // Character background layer (stable size, independent of message count)
                 CharacterAvatar(
                     state = ui.characterState,
                     emotion = ui.emotion,
-                    modifier = Modifier.fillMaxWidth().height(if (imeVisible) 80.dp else 210.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(CharacterDisplayHeight)
+                        .align(Alignment.TopCenter),
                     onOneShotFinished = vm::onCharacterAnimationFinished,
                 )
 
-                if (!ui.online) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    ) {
-                        Row(
-                            Modifier.padding(start = 16.dp, end = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "Đang offline — chỉ xem được lịch sử đã lưu.",
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            TextButton(onClick = vm::refresh) { Text("Thử lại") }
-                        }
-                    }
-                }
-
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                // Foreground chat panel (soft frosted gradient container, dynamic height based on IME)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(panelFraction)
+                        .align(Alignment.BottomCenter)
+                        .imePadding(),
+                    shape = ChatPanelShape,
+                    color = Color.Transparent,
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.75f)),
+                    shadowElevation = 0.dp,
                 ) {
-                    items(messages, key = { it.id }) { m ->
-                        MessageBubble(text = m.text, isUser = m.role == "user")
-                    }
-                    if (pending != null) {
-                        item(key = "pending") { MessageBubble(text = pending, isUser = true, dimmed = true) }
-                    }
-                    if (ui.sending) {
-                        item(key = "thinking") { TypingBubble() }
-                    }
-                    if (error != null) {
-                        item(key = "error") {
-                            Column {
-                                Text(
-                                    error,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                if (pending != null) {
-                                    Row {
-                                        TextButton(onClick = vm::send, enabled = ui.online) { Text("Thử lại") }
-                                        TextButton(onClick = vm::editPending) { Text("Sửa tin nhắn") }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(FrostedPanelGradient),
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            if (!ui.online) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                ) {
+                                    Row(
+                                        Modifier.padding(start = 16.dp, end = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            "Đang offline — chỉ xem được lịch sử đã lưu.",
+                                            modifier = Modifier.weight(1f),
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                        TextButton(onClick = vm::refresh) { Text("Thử lại") }
                                     }
                                 }
                             }
-                        }
-                    }
-                }
 
-                val canSend = ui.online && !ui.sending && (pending != null || ui.input.isNotBlank())
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedTextField(
-                        value = ui.input,
-                        onValueChange = vm::onInputChange,
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text("Nhắn gì đó cho mình nhé~") },
-                        maxLines = 4,
-                        shape = RoundedCornerShape(28.dp),
-                        enabled = pending == null && ui.online,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color.White,
-                            disabledContainerColor = Color(0xFFF1F1F4),
-                        ),
-                    )
-                    FilledIconButton(onClick = vm::send, enabled = canSend, shape = CircleShape) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Gửi")
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentPadding = PaddingValues(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                items(messages, key = { it.id }) { m ->
+                                    MessageBubble(text = m.text, isUser = m.role == "user")
+                                }
+                                if (pending != null) {
+                                    item(key = "pending") { MessageBubble(text = pending, isUser = true, dimmed = true) }
+                                }
+                                if (ui.sending) {
+                                    item(key = "thinking") { TypingBubble() }
+                                }
+                                if (error != null) {
+                                    item(key = "error") {
+                                        Column {
+                                            Text(
+                                                error,
+                                                color = MaterialTheme.colorScheme.error,
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
+                                            if (pending != null) {
+                                                Row {
+                                                    TextButton(onClick = vm::send, enabled = ui.online) { Text("Thử lại") }
+                                                    TextButton(onClick = vm::editPending) { Text("Sửa tin nhắn") }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            val canSend = ui.online && !ui.sending && (pending != null || ui.input.isNotBlank())
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = ui.input,
+                                    onValueChange = vm::onInputChange,
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { Text("Nhắn gì đó cho mình nhé~") },
+                                    maxLines = 4,
+                                    shape = RoundedCornerShape(28.dp),
+                                    enabled = pending == null && ui.online,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = Color.White,
+                                        unfocusedContainerColor = Color.White,
+                                        disabledContainerColor = Color(0xFFF1F1F4),
+                                    ),
+                                )
+                                FilledIconButton(onClick = vm::send, enabled = canSend, shape = CircleShape) {
+                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Gửi")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -207,7 +261,12 @@ private fun MessageBubble(text: String, isUser: Boolean, dimmed: Boolean = false
             shadowElevation = if (isUser) 0.dp else 2.dp,
             modifier = Modifier.widthIn(max = 300.dp).alpha(if (dimmed) 0.6f else 1f),
         ) {
-            Text(text, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+            Text(
+                text = text,
+                fontSize = 14.sp,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
         }
     }
 }
