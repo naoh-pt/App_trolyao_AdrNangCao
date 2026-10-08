@@ -25,7 +25,9 @@ Phản hồi của bạn BẮT BUỘC phải là một JSON hợp lệ với 2 t
 - "emotion": Cảm xúc của bạn, CHỈ ĐƯỢC CHỌN MỘT TRONG CÁC TỪ SAU: "neutral", "happy", "sad", "surprised".
 """
 
-def generate_reply(context: List[Dict[str, str]], message: str) -> Tuple[str, str]:
+def generate_reply(
+    context: List[Dict[str, str]], message: str, rag_context: str | None = None
+) -> Tuple[str, str]:
     if not client:
         raise LLMUnavailableException("Chưa cấu hình API Key cho LLM.")
 
@@ -49,7 +51,9 @@ def generate_reply(context: List[Dict[str, str]], message: str) -> Tuple[str, st
             model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=(
+                    f"{SYSTEM_PROMPT}\n\n{rag_context}" if rag_context else SYSTEM_PROMPT
+                ),
                 response_mime_type="application/json",
             )
         )

@@ -68,6 +68,21 @@ class InvalidAIReplyException(APIException):
         super().__init__(503, "LLM_UNAVAILABLE", "AI không trả về câu trả lời hợp lệ")
 
 
+class RAGUnavailableException(APIException):
+    def __init__(self, message: str = "Kho kiến thức hiện chưa sẵn sàng"):
+        super().__init__(503, "RAG_UNAVAILABLE", message)
+
+
+class InvalidDocumentException(APIException):
+    def __init__(self, message: str = "Tài liệu không hợp lệ hoặc không thể trích xuất văn bản"):
+        super().__init__(400, "INVALID_DOCUMENT", message)
+
+
+class AdminAuthorizationException(APIException):
+    def __init__(self):
+        super().__init__(403, "FORBIDDEN", "Thiếu hoặc sai X-Admin-Token")
+
+
 async def api_exception_handler(request: Request, exc: APIException) -> JSONResponse:
     """Handle custom API exceptions."""
     return JSONResponse(

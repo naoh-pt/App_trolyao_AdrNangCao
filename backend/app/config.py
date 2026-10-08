@@ -27,8 +27,16 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 USE_REAL_AI = _as_bool(os.getenv("USE_REAL_AI"), default=False)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
 
 try:
     GEMINI_TIMEOUT_MS = int(os.getenv("GEMINI_TIMEOUT_MS", "60000"))
 except ValueError:
     GEMINI_TIMEOUT_MS = 60000
+
+RAG_ENABLED = _as_bool(os.getenv("RAG_ENABLED"), default=False)
+RAG_ADMIN_TOKEN = os.getenv("RAG_ADMIN_TOKEN")
+RAG_COLLECTION = os.getenv("RAG_COLLECTION", "student_handbook_chunks")
+RAG_CHROMA_PATH = os.getenv("RAG_CHROMA_PATH", str(BASE_DIR / "chroma_data"))
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+RAG_MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.70"))

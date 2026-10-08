@@ -232,3 +232,27 @@ curl.exe -i -X DELETE "http://127.0.0.1:8000/api/v1/conversations/$convId" `
    ```
 
 `app.config` tự nạp `backend/.env`, kể cả khi Uvicorn chạy với `--reload`. Để dùng Mock AI cho demo/test, đặt `USE_REAL_AI=false` rồi khởi động lại server.
+
+## RAG: Sổ tay sinh viên
+
+RAG dùng Chroma local để lưu các chunks/vector embedding và SQLite để lưu metadata tài liệu cùng nguồn đã dùng trong mỗi câu trả lời. Khi không có đoạn sổ tay nào đủ liên quan, chat tự động dùng Gemini bình thường.
+
+Thêm vào `backend/.env`:
+
+```env
+RAG_ENABLED=true
+RAG_ADMIN_TOKEN=tao_mot_chuoi_bi_mat_dai_va_ngau_nhien
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+RAG_TOP_K=4
+RAG_MIN_SCORE=0.70
+```
+
+Khởi động lại server, vào Swagger `http://localhost:8000/docs`, gọi `POST /api/v1/knowledge/documents` và:
+
+- điền header `X-Admin-Token` bằng đúng `RAG_ADMIN_TOKEN`;
+- chọn file PDF sổ tay có thể bôi đen/copy chữ (tối đa 15 MB);
+- gửi request. API trả về số trang và số chunks đã import.
+
+`GET /api/v1/knowledge/documents` cho phép kiểm tra danh sách tài liệu đã import, cũng yêu cầu `X-Admin-Token`. Endpoint upload không dùng `X-Client-Id` vì đây là thao tác quản trị. Chat vẫn dùng `X-Client-Id` như trước.
+
+Mỗi phản hồi chat có thêm trường `sources`. Nếu RAG được dùng, mỗi nguồn chứa `filename`, `page_number`, `document_id`, và `score`; nếu câu hỏi ngoài phạm vi sổ tay thì `sources` là mảng rỗng và Gemini trả lời theo kiến thức chung.

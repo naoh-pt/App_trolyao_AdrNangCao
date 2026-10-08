@@ -9,6 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1.conversations import router as conversations_router
 from app.api.v1.health import router as health_router
+from app.api.v1.knowledge import router as knowledge_router
 from app.db.connection import init_db
 from app.exceptions import (
     APIException,
@@ -53,6 +54,7 @@ app.add_middleware(
 # API v1 routes
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(conversations_router, prefix="/api/v1")
+app.include_router(knowledge_router, prefix="/api/v1")
 
 
 @app.get("/health", include_in_schema=False)

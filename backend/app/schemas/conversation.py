@@ -3,6 +3,8 @@
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.knowledge import SourceResponse
+
 
 class ConversationCreate(BaseModel):
     """Optional payload when creating a conversation."""
@@ -50,6 +52,7 @@ class SendMessageResponse(BaseModel):
     """Pair of messages returned upon successfully sending a message."""
     user_message: MessageResponse
     assistant_message: MessageResponse
+    sources: List[SourceResponse] = Field(default_factory=list)
 
 
 class ErrorDetail(BaseModel):

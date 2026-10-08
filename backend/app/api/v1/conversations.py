@@ -2,6 +2,7 @@
 
 import sqlite3
 import uuid
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Response, status
 
@@ -23,9 +24,12 @@ from app.schemas.conversation import (
     SendMessageRequest,
     SendMessageResponse,
 )
+from app.schemas.knowledge import SourceResponse
 import ai_service
 from app.config import USE_REAL_AI
 import app.services.mock_ai as mock_ai
+from app.services.rag_service import prompt_context, retrieve
+from app.exceptions import RAGUnavailableException
 from app.services.request_guard import own_request
 from app.utils.time import utc_now_iso
 
@@ -189,6 +193,15 @@ def delete_conversation(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _sources_for_message(db: sqlite3.Connection, assistant_message_id: str) -> list[SourceResponse]:
+    rows = db.execute(
+        """SELECT document_id, filename, page_number, score FROM message_sources
+           WHERE assistant_message_id = ? ORDER BY score DESC""",
+        (assistant_message_id,),
+    ).fetchall()
+    return [SourceResponse(**dict(row)) for row in rows]
+
+
 def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id: str, message: str):
     """Return a committed pair, or None when this request ID is unused."""
     row = db.execute(
@@ -215,6 +228,7 @@ def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id
     return SendMessageResponse(
         user_message=MessageResponse(**dict(user)),
         assistant_message=MessageResponse(**dict(assistant)),
+        sources=_sources_for_message(db, assistant["id"]),
     )
 
 
@@ -278,8 +292,13 @@ def send_message(
             {"role": row["role"], "text": row["text"], "emotion": row["emotion"]}
             for row in rows
         ]
+        retrieved = []
         if USE_REAL_AI:
-            result = ai_service.generate_reply(context, normalized_msg)
+            try:
+                retrieved = retrieve(normalized_msg)
+            except RAGUnavailableException:
+                logging.warning("RAG unavailable; continuing with normal Gemini reply", exc_info=True)
+            result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
         else:
             result = mock_ai.generate_reply(context, normalized_msg)
         if not isinstance(result, (tuple, list)) or len(result) != 2:
@@ -320,6 +339,20 @@ def send_message(
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (req_id, client_id, conv_id, normalized_msg, user_msg_id, asst_msg_id, now_ts),
                 )
+                for source in retrieved:
+                    db.execute(
+                        """INSERT INTO message_sources
+                           (assistant_message_id, document_id, chunk_id, filename, page_number, score)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (
+                            asst_msg_id,
+                            source.document_id,
+                            source.chunk_id,
+                            source.filename,
+                            source.page_number,
+                            source.score,
+                        ),
+                    )
                 db.execute(
                     "UPDATE conversations SET updated_at = ? WHERE id = ? AND client_id = ?",
                     (now_ts, conv_id, client_id),
@@ -346,4 +379,13 @@ def send_message(
                 id=asst_msg_id, role="assistant", text=reply_text,
                 emotion=reply_emotion, created_at=now_ts
             ),
+            sources=[
+                SourceResponse(
+                    document_id=item.document_id,
+                    filename=item.filename,
+                    page_number=item.page_number,
+                    score=item.score,
+                )
+                for item in retrieved
+            ],
         )
