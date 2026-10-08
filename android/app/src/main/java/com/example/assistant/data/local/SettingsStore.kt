@@ -3,10 +3,13 @@ package com.example.assistant.data.local
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.assistant.domain.AnimationFpsSettings
+import com.example.assistant.domain.ChatDisplaySettings
+import com.example.assistant.domain.SpeechSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -20,6 +23,10 @@ class SettingsStore(private val context: Context) {
     private val baseUrlKey = stringPreferencesKey("base_url")
 
     private val ttsEnabledKey = booleanPreferencesKey("tts_enabled")
+    private val speechRateKey = floatPreferencesKey("speech_rate")
+    private val speechPitchKey = floatPreferencesKey("speech_pitch")
+
+    private val messageFontSizeKey = intPreferencesKey("message_font_size_sp")
 
     private val idleFpsKey = intPreferencesKey("fps_idle")
     private val thinkingFpsKey = intPreferencesKey("fps_thinking")
@@ -55,12 +62,75 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[baseUrlKey] = normalized }
     }
 
-    val ttsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[ttsEnabledKey] ?: DEFAULT_TTS_ENABLED
+    val speechSettings: Flow<SpeechSettings> = context.dataStore.data.map { prefs ->
+        SpeechSettings(
+            enabled = prefs[ttsEnabledKey] ?: SpeechSettings.DEFAULT_ENABLED,
+            speechRate = SpeechSettings.normalize(prefs[speechRateKey] ?: SpeechSettings.DEFAULT_RATE),
+            pitch = SpeechSettings.normalize(prefs[speechPitchKey] ?: SpeechSettings.DEFAULT_PITCH),
+        )
     }
+
+    val ttsEnabled: Flow<Boolean> = speechSettings.map { it.enabled }
 
     suspend fun setTtsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[ttsEnabledKey] = enabled }
+    }
+
+    suspend fun setSpeechRate(rate: Float) {
+        val normalized = SpeechSettings.normalize(rate)
+        context.dataStore.edit { it[speechRateKey] = normalized }
+    }
+
+    suspend fun setPitch(pitch: Float) {
+        val normalized = SpeechSettings.normalize(pitch)
+        context.dataStore.edit { it[speechPitchKey] = normalized }
+    }
+
+    suspend fun adjustSpeechRate(delta: Float) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[speechRateKey] ?: SpeechSettings.DEFAULT_RATE
+            prefs[speechRateKey] = SpeechSettings.normalize(current + delta)
+        }
+    }
+
+    suspend fun adjustPitch(delta: Float) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[speechPitchKey] ?: SpeechSettings.DEFAULT_PITCH
+            prefs[speechPitchKey] = SpeechSettings.normalize(current + delta)
+        }
+    }
+
+    suspend fun resetSpeechVoiceDefaults() {
+        context.dataStore.edit { prefs ->
+            prefs[speechRateKey] = SpeechSettings.DEFAULT_RATE
+            prefs[speechPitchKey] = SpeechSettings.DEFAULT_PITCH
+        }
+    }
+
+    val chatDisplaySettings: Flow<ChatDisplaySettings> = context.dataStore.data.map { prefs ->
+        ChatDisplaySettings(
+            fontSizeSp = ChatDisplaySettings.clampFontSize(
+                prefs[messageFontSizeKey] ?: ChatDisplaySettings.DEFAULT_FONT_SIZE_SP
+            )
+        )
+    }
+
+    suspend fun setMessageFontSize(fontSizeSp: Int) {
+        val clamped = ChatDisplaySettings.clampFontSize(fontSizeSp)
+        context.dataStore.edit { it[messageFontSizeKey] = clamped }
+    }
+
+    suspend fun adjustMessageFontSize(delta: Int) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[messageFontSizeKey] ?: ChatDisplaySettings.DEFAULT_FONT_SIZE_SP
+            prefs[messageFontSizeKey] = ChatDisplaySettings.clampFontSize(current + delta)
+        }
+    }
+
+    suspend fun resetMessageFontSize() {
+        context.dataStore.edit { prefs ->
+            prefs[messageFontSizeKey] = ChatDisplaySettings.DEFAULT_FONT_SIZE_SP
+        }
     }
 
     val animationFpsSettings: Flow<AnimationFpsSettings> = context.dataStore.data.map { prefs ->

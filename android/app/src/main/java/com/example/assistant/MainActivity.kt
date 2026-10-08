@@ -16,7 +16,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.assistant.data.local.SettingsStore
 import com.example.assistant.domain.AnimationFpsSettings
+import com.example.assistant.domain.ChatDisplaySettings
 import com.example.assistant.domain.LocalAnimationFpsSettings
+import com.example.assistant.domain.LocalChatDisplaySettings
+import com.example.assistant.domain.LocalSpeechSettings
+import com.example.assistant.domain.SpeechSettings
 import com.example.assistant.speech.LocalTtsEnabled
 import com.example.assistant.ui.chat.ChatScreen
 import com.example.assistant.ui.chat.ChatViewModel
@@ -45,12 +49,17 @@ class MainActivity : ComponentActivity() {
             val fpsSettings by settingsStore.animationFpsSettings.collectAsStateWithLifecycle(
                 initialValue = AnimationFpsSettings.DEFAULT,
             )
-            val ttsEnabled by settingsStore.ttsEnabled.collectAsStateWithLifecycle(
-                initialValue = SettingsStore.DEFAULT_TTS_ENABLED,
+            val speechSettings by settingsStore.speechSettings.collectAsStateWithLifecycle(
+                initialValue = SpeechSettings.DEFAULT,
+            )
+            val chatDisplaySettings by settingsStore.chatDisplaySettings.collectAsStateWithLifecycle(
+                initialValue = ChatDisplaySettings.DEFAULT,
             )
             CompositionLocalProvider(
                 LocalAnimationFpsSettings provides fpsSettings,
-                LocalTtsEnabled provides ttsEnabled,
+                LocalSpeechSettings provides speechSettings,
+                LocalTtsEnabled provides speechSettings.enabled,
+                LocalChatDisplaySettings provides chatDisplaySettings,
             ) {
                 AssistantTheme { AppNav() }
             }

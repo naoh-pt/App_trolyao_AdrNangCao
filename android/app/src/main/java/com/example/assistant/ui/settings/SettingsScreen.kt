@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -49,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.assistant.domain.AnimationFpsSettings
+import com.example.assistant.domain.ChatDisplaySettings
+import com.example.assistant.domain.SpeechSettings
 import com.example.assistant.speech.VietnameseTtsHelper
 import com.example.assistant.speech.rememberVietnameseTts
 import com.example.assistant.ui.character.CharacterAnimationPlayer
@@ -105,6 +108,11 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                 // Section 2: Speech Settings (Text-to-Speech)
                 item {
                     SpeechSettingsSection(ui = ui, vm = vm, ttsHelper = ttsHelper)
+                }
+
+                // Section 2.5: Chat Display Settings (Message Font Size)
+                item {
+                    ChatDisplaySettingsSection(ui = ui, vm = vm)
                 }
 
                 // Section 3: Character Animation Settings & Preview
@@ -187,6 +195,7 @@ private fun SpeechSettingsSection(
     vm: SettingsViewModel,
     ttsHelper: VietnameseTtsHelper,
 ) {
+    val speech = ui.speechSettings
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -216,7 +225,7 @@ private fun SpeechSettingsSection(
                     fontWeight = FontWeight.Medium,
                 )
                 Switch(
-                    checked = ui.ttsEnabled,
+                    checked = speech.enabled,
                     onCheckedChange = { isChecked ->
                         vm.setTtsEnabled(isChecked)
                         if (!isChecked) {
@@ -226,28 +235,318 @@ private fun SpeechSettingsSection(
                 )
             }
 
+            HorizontalDivider(
+                color = Color.LightGray.copy(alpha = 0.3f),
+                thickness = 0.5.dp,
+            )
+
+            VoiceControlRow(
+                label = "Tốc độ đọc",
+                displayValue = SpeechSettings.formatMultiplier(speech.speechRate),
+                canDecrease = speech.canDecreaseRate(),
+                canIncrease = speech.canIncreaseRate(),
+                onDecrease = {
+                    ttsHelper.stop()
+                    vm.decreaseSpeechRate()
+                },
+                onIncrease = {
+                    ttsHelper.stop()
+                    vm.increaseSpeechRate()
+                },
+                decreaseContentDescription = "Giảm tốc độ đọc",
+                increaseContentDescription = "Tăng tốc độ đọc",
+            )
+
+            HorizontalDivider(
+                color = Color.LightGray.copy(alpha = 0.3f),
+                thickness = 0.5.dp,
+            )
+
+            VoiceControlRow(
+                label = "Cao độ giọng",
+                displayValue = SpeechSettings.formatMultiplier(speech.pitch),
+                canDecrease = speech.canDecreasePitch(),
+                canIncrease = speech.canIncreasePitch(),
+                onDecrease = {
+                    ttsHelper.stop()
+                    vm.decreasePitch()
+                },
+                onIncrease = {
+                    ttsHelper.stop()
+                    vm.increasePitch()
+                },
+                decreaseContentDescription = "Giảm cao độ giọng",
+                increaseContentDescription = "Tăng cao độ giọng",
+            )
+
+            HorizontalDivider(
+                color = Color.LightGray.copy(alpha = 0.3f),
+                thickness = 0.5.dp,
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedButton(
                     onClick = {
-                        ttsHelper.speak("Xin chào, mình là trợ lý ảo của bạn.")
+                        ttsHelper.speak("Xin chào, mình là trợ lý ảo của bạn.", speech)
                     },
-                    enabled = ui.ttsEnabled && ttsHelper.isReady,
+                    enabled = speech.enabled && ttsHelper.isReady,
                     shape = CircleShape,
                 ) {
                     Text("Nghe thử")
                 }
 
-                ttsHelper.errorMessage.value?.let { errorMsg ->
+                OutlinedButton(
+                    onClick = {
+                        ttsHelper.stop()
+                        vm.restoreVoiceDefaults()
+                    },
+                    shape = CircleShape,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Khôi phục giọng mặc định"
+                    },
+                ) {
+                    Text("Khôi phục giọng mặc định")
+                }
+            }
+
+            ttsHelper.errorMessage.value?.let { errorMsg ->
+                Text(
+                    errorMsg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoiceControlRow(
+    label: String,
+    displayValue: String,
+    canDecrease: Boolean,
+    canIncrease: Boolean,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+    decreaseContentDescription: String,
+    increaseContentDescription: String,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+        )
+
+        IconButton(
+            onClick = onDecrease,
+            enabled = canDecrease,
+            modifier = Modifier
+                .size(36.dp)
+                .semantics { contentDescription = decreaseContentDescription },
+        ) {
+            Text(
+                "−",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (canDecrease) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                },
+            )
+        }
+
+        Text(
+            text = displayValue,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(60.dp),
+        )
+
+        IconButton(
+            onClick = onIncrease,
+            enabled = canIncrease,
+            modifier = Modifier
+                .size(36.dp)
+                .semantics { contentDescription = increaseContentDescription },
+        ) {
+            Text(
+                "+",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (canIncrease) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChatDisplaySettingsSection(
+    ui: SettingsUiState,
+    vm: SettingsViewModel,
+) {
+    val display = ui.chatDisplaySettings
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.85f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                "Hiển thị trò chuyện",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            // Row: Cỡ chữ tin nhắn
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Cỡ chữ tin nhắn",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f),
+                )
+
+                IconButton(
+                    onClick = vm::decreaseMessageFontSize,
+                    enabled = display.canDecrease(),
+                    modifier = Modifier
+                        .size(36.dp)
+                        .semantics { contentDescription = "Giảm cỡ chữ tin nhắn" },
+                ) {
                     Text(
-                        errorMsg,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.weight(1f),
+                        "−",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (display.canDecrease()) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
                     )
+                }
+
+                Text(
+                    text = "${display.fontSizeSp}sp",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(60.dp),
+                )
+
+                IconButton(
+                    onClick = vm::increaseMessageFontSize,
+                    enabled = display.canIncrease(),
+                    modifier = Modifier
+                        .size(36.dp)
+                        .semantics { contentDescription = "Tăng cỡ chữ tin nhắn" },
+                ) {
+                    Text(
+                        "+",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (display.canIncrease()) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        },
+                    )
+                }
+            }
+
+            // Button: Khôi phục cỡ chữ
+            OutlinedButton(
+                onClick = vm::restoreMessageFontSize,
+                shape = CircleShape,
+                modifier = Modifier.semantics {
+                    contentDescription = "Khôi phục cỡ chữ tin nhắn về mặc định"
+                },
+            ) {
+                Text("Khôi phục cỡ chữ")
+            }
+
+            HorizontalDivider(
+                color = Color.LightGray.copy(alpha = 0.3f),
+                thickness = 0.5.dp,
+            )
+
+            // Lightweight preview
+            Text(
+                text = "Xem trước:",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // User bubble preview
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ) {
+                        Text(
+                            text = "Xin chào!",
+                            fontSize = display.fontSizeSp.sp,
+                            lineHeight = display.lineHeightSp.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+
+                // Assistant bubble preview
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp),
+                        color = Color.White,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = 1.dp,
+                    ) {
+                        Text(
+                            text = "Mình có thể giúp gì cho bạn?",
+                            fontSize = display.fontSizeSp.sp,
+                            lineHeight = display.lineHeightSp.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
                 }
             }
         }

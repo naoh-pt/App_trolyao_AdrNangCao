@@ -56,6 +56,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.assistant.domain.ChatDisplaySettings
+import com.example.assistant.domain.LocalChatDisplaySettings
+import com.example.assistant.domain.LocalSpeechSettings
+import com.example.assistant.domain.SpeechSettings
 import com.example.assistant.speech.LocalTtsEnabled
 import com.example.assistant.speech.rememberVietnameseTts
 import com.example.assistant.ui.components.CharacterAvatar
@@ -81,13 +85,28 @@ private val FrostedPanelGradient = Brush.verticalGradient(
     1.0f to Color(0xFFF9FBFE).copy(alpha = 0.95f),
 )
 
+@Composable
+fun ChatScreen(
+    vm: ChatViewModel,
+    onBack: () -> Unit,
+    onHistory: () -> Unit,
+    ttsEnabled: Boolean,
+) = ChatScreen(
+    vm = vm,
+    onBack = onBack,
+    onHistory = onHistory,
+    speechSettings = LocalSpeechSettings.current.copy(enabled = ttsEnabled),
+    displaySettings = LocalChatDisplaySettings.current,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     vm: ChatViewModel,
     onBack: () -> Unit,
     onHistory: () -> Unit,
-    ttsEnabled: Boolean = LocalTtsEnabled.current,
+    speechSettings: SpeechSettings = LocalSpeechSettings.current,
+    displaySettings: ChatDisplaySettings = LocalChatDisplaySettings.current,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val messages by vm.messages.collectAsStateWithLifecycle()
@@ -99,16 +118,16 @@ fun ChatScreen(
 
     val ttsHelper = rememberVietnameseTts()
 
-    LaunchedEffect(ttsEnabled) {
-        if (!ttsEnabled) {
+    LaunchedEffect(speechSettings.enabled) {
+        if (!speechSettings.enabled) {
             ttsHelper.stop()
         }
     }
 
-    LaunchedEffect(vm, ttsEnabled) {
+    LaunchedEffect(vm, speechSettings) {
         vm.speechEvents.collect { text ->
-            if (ttsEnabled) {
-                ttsHelper.speak(text)
+            if (speechSettings.enabled) {
+                ttsHelper.speak(text, speechSettings.speechRate, speechSettings.pitch)
             }
         }
     }
@@ -210,10 +229,23 @@ fun ChatScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 items(messages, key = { it.id }) { m ->
-                                    MessageBubble(text = m.text, isUser = m.role == "user")
+                                    MessageBubble(
+                                        text = m.text,
+                                        isUser = m.role == "user",
+                                        fontSizeSp = displaySettings.fontSizeSp,
+                                        lineHeightSp = displaySettings.lineHeightSp,
+                                    )
                                 }
                                 if (pending != null) {
-                                    item(key = "pending") { MessageBubble(text = pending, isUser = true, dimmed = true) }
+                                    item(key = "pending") {
+                                        MessageBubble(
+                                            text = pending,
+                                            isUser = true,
+                                            dimmed = true,
+                                            fontSizeSp = displaySettings.fontSizeSp,
+                                            lineHeightSp = displaySettings.lineHeightSp,
+                                        )
+                                    }
                                 }
                                 if (ui.sending) {
                                     item(key = "thinking") { TypingBubble() }
@@ -272,7 +304,13 @@ fun ChatScreen(
 }
 
 @Composable
-private fun MessageBubble(text: String, isUser: Boolean, dimmed: Boolean = false) {
+private fun MessageBubble(
+    text: String,
+    isUser: Boolean,
+    dimmed: Boolean = false,
+    fontSizeSp: Int = ChatDisplaySettings.DEFAULT_FONT_SIZE_SP,
+    lineHeightSp: Int = fontSizeSp + ChatDisplaySettings.LINE_HEIGHT_OFFSET_SP,
+) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
@@ -286,8 +324,8 @@ private fun MessageBubble(text: String, isUser: Boolean, dimmed: Boolean = false
         ) {
             Text(
                 text = text,
-                fontSize = 14.sp,
-                lineHeight = 18.sp,
+                fontSize = fontSizeSp.sp,
+                lineHeight = lineHeightSp.sp,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }

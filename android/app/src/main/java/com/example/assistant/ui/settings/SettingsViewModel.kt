@@ -8,6 +8,8 @@ import com.example.assistant.assistantApp
 import com.example.assistant.data.local.SettingsStore
 import com.example.assistant.data.repo.ChatRepository
 import com.example.assistant.domain.AnimationFpsSettings
+import com.example.assistant.domain.ChatDisplaySettings
+import com.example.assistant.domain.SpeechSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,11 +22,37 @@ data class SettingsUiState(
     val status: String? = null,
     val statusOk: Boolean = false,
     val busy: Boolean = false,
-    val ttsEnabled: Boolean = SettingsStore.DEFAULT_TTS_ENABLED,
+    val speechSettings: SpeechSettings = SpeechSettings.DEFAULT,
+    val chatDisplaySettings: ChatDisplaySettings = ChatDisplaySettings.DEFAULT,
     val fpsSettings: AnimationFpsSettings = AnimationFpsSettings.DEFAULT,
     val selectedPreviewAction: String = AnimationFpsSettings.ACTION_IDLE,
     val replayKey: Long = 0L,
-)
+) {
+    val ttsEnabled: Boolean
+        get() = speechSettings.enabled
+
+    constructor(
+        url: String = "",
+        status: String? = null,
+        statusOk: Boolean = false,
+        busy: Boolean = false,
+        ttsEnabled: Boolean,
+        fpsSettings: AnimationFpsSettings = AnimationFpsSettings.DEFAULT,
+        selectedPreviewAction: String = AnimationFpsSettings.ACTION_IDLE,
+        replayKey: Long = 0L,
+        chatDisplaySettings: ChatDisplaySettings = ChatDisplaySettings.DEFAULT,
+    ) : this(
+        url = url,
+        status = status,
+        statusOk = statusOk,
+        busy = busy,
+        speechSettings = SpeechSettings.DEFAULT.copy(enabled = ttsEnabled),
+        chatDisplaySettings = chatDisplaySettings,
+        fpsSettings = fpsSettings,
+        selectedPreviewAction = selectedPreviewAction,
+        replayKey = replayKey,
+    )
+}
 
 class SettingsViewModel(
     private val settings: SettingsStore,
@@ -44,8 +72,13 @@ class SettingsViewModel(
             }
         }
         viewModelScope.launch {
-            settings.ttsEnabled.collect { enabled ->
-                _ui.update { s -> s.copy(ttsEnabled = enabled) }
+            settings.speechSettings.collect { speech ->
+                _ui.update { s -> s.copy(speechSettings = speech) }
+            }
+        }
+        viewModelScope.launch {
+            settings.chatDisplaySettings.collect { display ->
+                _ui.update { s -> s.copy(chatDisplaySettings = display) }
             }
         }
     }
@@ -53,6 +86,60 @@ class SettingsViewModel(
     fun setTtsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settings.setTtsEnabled(enabled)
+        }
+    }
+
+    fun decreaseSpeechRate() {
+        if (!_ui.value.speechSettings.canDecreaseRate()) return
+        viewModelScope.launch {
+            settings.adjustSpeechRate(-SpeechSettings.STEP)
+        }
+    }
+
+    fun increaseSpeechRate() {
+        if (!_ui.value.speechSettings.canIncreaseRate()) return
+        viewModelScope.launch {
+            settings.adjustSpeechRate(SpeechSettings.STEP)
+        }
+    }
+
+    fun decreasePitch() {
+        if (!_ui.value.speechSettings.canDecreasePitch()) return
+        viewModelScope.launch {
+            settings.adjustPitch(-SpeechSettings.STEP)
+        }
+    }
+
+    fun increasePitch() {
+        if (!_ui.value.speechSettings.canIncreasePitch()) return
+        viewModelScope.launch {
+            settings.adjustPitch(SpeechSettings.STEP)
+        }
+    }
+
+    fun restoreVoiceDefaults() {
+        viewModelScope.launch {
+            settings.resetSpeechVoiceDefaults()
+        }
+    }
+
+    fun decreaseMessageFontSize() {
+        if (!_ui.value.chatDisplaySettings.canDecrease()) return
+        viewModelScope.launch {
+            settings.adjustMessageFontSize(-ChatDisplaySettings.STEP_FONT_SIZE_SP)
+        }
+    }
+
+    fun increaseMessageFontSize() {
+        if (!_ui.value.chatDisplaySettings.canIncrease()) return
+        viewModelScope.launch {
+            settings.adjustMessageFontSize(ChatDisplaySettings.STEP_FONT_SIZE_SP)
+        }
+    }
+
+    fun restoreMessageFontSize() {
+        viewModelScope.launch {
+            settings.resetMessageFontSize()
         }
     }
 
