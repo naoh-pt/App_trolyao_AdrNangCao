@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -48,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.assistant.domain.AnimationFpsSettings
+import com.example.assistant.speech.VietnameseTtsHelper
+import com.example.assistant.speech.rememberVietnameseTts
 import com.example.assistant.ui.character.CharacterAnimationPlayer
 import com.example.assistant.ui.character.CharacterFrameCatalog
 import com.example.assistant.ui.components.CuteBackground
@@ -70,6 +73,7 @@ private val AnimationActionItems = listOf(
 @Composable
 fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val ttsHelper = rememberVietnameseTts()
     CuteBackground {
         Scaffold(
             containerColor = Color.Transparent,
@@ -98,7 +102,12 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                     BackendSettingsSection(ui = ui, vm = vm)
                 }
 
-                // Section 2: Character Animation Settings & Preview
+                // Section 2: Speech Settings (Text-to-Speech)
+                item {
+                    SpeechSettingsSection(ui = ui, vm = vm, ttsHelper = ttsHelper)
+                }
+
+                // Section 3: Character Animation Settings & Preview
                 item {
                     AnimationSettingsHeader()
                 }
@@ -167,6 +176,79 @@ private fun BackendSettingsSection(ui: SettingsUiState, vm: SettingsViewModel) {
                     it,
                     color = if (ui.statusOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpeechSettingsSection(
+    ui: SettingsUiState,
+    vm: SettingsViewModel,
+    ttsHelper: VietnameseTtsHelper,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.85f)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                "Giọng nói",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "Đọc câu trả lời",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                )
+                Switch(
+                    checked = ui.ttsEnabled,
+                    onCheckedChange = { isChecked ->
+                        vm.setTtsEnabled(isChecked)
+                        if (!isChecked) {
+                            ttsHelper.stop()
+                        }
+                    },
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        ttsHelper.speak("Xin chào, mình là trợ lý ảo của bạn.")
+                    },
+                    enabled = ui.ttsEnabled && ttsHelper.isReady,
+                    shape = CircleShape,
+                ) {
+                    Text("Nghe thử")
+                }
+
+                ttsHelper.errorMessage.value?.let { errorMsg ->
+                    Text(
+                        errorMsg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }

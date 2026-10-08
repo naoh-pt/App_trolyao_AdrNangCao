@@ -1,6 +1,7 @@
 package com.example.assistant.data.local
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -17,6 +18,8 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 class SettingsStore(private val context: Context) {
     private val clientIdKey = stringPreferencesKey("client_id")
     private val baseUrlKey = stringPreferencesKey("base_url")
+
+    private val ttsEnabledKey = booleanPreferencesKey("tts_enabled")
 
     private val idleFpsKey = intPreferencesKey("fps_idle")
     private val thinkingFpsKey = intPreferencesKey("fps_thinking")
@@ -50,6 +53,14 @@ class SettingsStore(private val context: Context) {
     suspend fun setBaseUrl(url: String) {
         val normalized = normalize(url) ?: return
         context.dataStore.edit { it[baseUrlKey] = normalized }
+    }
+
+    val ttsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[ttsEnabledKey] ?: DEFAULT_TTS_ENABLED
+    }
+
+    suspend fun setTtsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[ttsEnabledKey] = enabled }
     }
 
     val animationFpsSettings: Flow<AnimationFpsSettings> = context.dataStore.data.map { prefs ->
@@ -105,6 +116,7 @@ class SettingsStore(private val context: Context) {
 
     companion object {
         const val DEFAULT_BASE_URL = "http://10.0.2.2:8000/" // emulator -> laptop
+        const val DEFAULT_TTS_ENABLED = true
 
         /**
          * Trả về Retrofit base URL chuẩn hóa ending in '/' hoặc null nếu không hợp lệ.

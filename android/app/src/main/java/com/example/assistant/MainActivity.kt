@@ -14,8 +14,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.assistant.data.local.SettingsStore
 import com.example.assistant.domain.AnimationFpsSettings
 import com.example.assistant.domain.LocalAnimationFpsSettings
+import com.example.assistant.speech.LocalTtsEnabled
 import com.example.assistant.ui.chat.ChatScreen
 import com.example.assistant.ui.chat.ChatViewModel
 import com.example.assistant.ui.history.HistoryScreen
@@ -43,7 +45,13 @@ class MainActivity : ComponentActivity() {
             val fpsSettings by settingsStore.animationFpsSettings.collectAsStateWithLifecycle(
                 initialValue = AnimationFpsSettings.DEFAULT,
             )
-            CompositionLocalProvider(LocalAnimationFpsSettings provides fpsSettings) {
+            val ttsEnabled by settingsStore.ttsEnabled.collectAsStateWithLifecycle(
+                initialValue = SettingsStore.DEFAULT_TTS_ENABLED,
+            )
+            CompositionLocalProvider(
+                LocalAnimationFpsSettings provides fpsSettings,
+                LocalTtsEnabled provides ttsEnabled,
+            ) {
                 AssistantTheme { AppNav() }
             }
         }

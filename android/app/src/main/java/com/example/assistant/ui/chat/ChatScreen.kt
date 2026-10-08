@@ -56,6 +56,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.assistant.speech.LocalTtsEnabled
+import com.example.assistant.speech.rememberVietnameseTts
 import com.example.assistant.ui.components.CharacterAvatar
 import com.example.assistant.ui.components.CuteBackground
 
@@ -81,7 +83,12 @@ private val FrostedPanelGradient = Brush.verticalGradient(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onHistory: () -> Unit) {
+fun ChatScreen(
+    vm: ChatViewModel,
+    onBack: () -> Unit,
+    onHistory: () -> Unit,
+    ttsEnabled: Boolean = LocalTtsEnabled.current,
+) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val messages by vm.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -89,6 +96,22 @@ fun ChatScreen(vm: ChatViewModel, onBack: () -> Unit, onHistory: () -> Unit) {
     val panelFraction = if (imeVisible) ChatPanelKeyboardFraction else ChatPanelClosedFraction
     val pending = ui.pending
     val error = ui.error
+
+    val ttsHelper = rememberVietnameseTts()
+
+    LaunchedEffect(ttsEnabled) {
+        if (!ttsEnabled) {
+            ttsHelper.stop()
+        }
+    }
+
+    LaunchedEffect(vm, ttsEnabled) {
+        vm.speechEvents.collect { text ->
+            if (ttsEnabled) {
+                ttsHelper.speak(text)
+            }
+        }
+    }
 
     val itemCount = messages.size +
         (if (pending != null) 1 else 0) +

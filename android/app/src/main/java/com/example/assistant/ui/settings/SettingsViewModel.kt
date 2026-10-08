@@ -20,6 +20,7 @@ data class SettingsUiState(
     val status: String? = null,
     val statusOk: Boolean = false,
     val busy: Boolean = false,
+    val ttsEnabled: Boolean = SettingsStore.DEFAULT_TTS_ENABLED,
     val fpsSettings: AnimationFpsSettings = AnimationFpsSettings.DEFAULT,
     val selectedPreviewAction: String = AnimationFpsSettings.ACTION_IDLE,
     val replayKey: Long = 0L,
@@ -41,6 +42,17 @@ class SettingsViewModel(
             settings.animationFpsSettings.collect { fps ->
                 _ui.update { s -> s.copy(fpsSettings = fps) }
             }
+        }
+        viewModelScope.launch {
+            settings.ttsEnabled.collect { enabled ->
+                _ui.update { s -> s.copy(ttsEnabled = enabled) }
+            }
+        }
+    }
+
+    fun setTtsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settings.setTtsEnabled(enabled)
         }
     }
 

@@ -12,9 +12,12 @@ import com.example.assistant.domain.Emotion
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -72,6 +75,10 @@ class ChatViewModel(
     val messages: StateFlow<List<MessageEntity>> = conversationId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repo.observeMessages(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _speechEvents = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
+    /** One-time speech events emitted strictly when a new assistant response is received. */
+    val speechEvents: SharedFlow<String> = _speechEvents.asSharedFlow()
 
     private var requestId: String? = null
     private var talkJob: Job? = null
@@ -159,6 +166,9 @@ class ChatViewModel(
                             characterState = CharacterState.TALKING,
                             emotion = emotion,
                         )
+                    }
+                    if (reply.text.isNotBlank()) {
+                        _speechEvents.emit(reply.text)
                     }
                     if (emotion == Emotion.NEUTRAL) {
                         talkJob = viewModelScope.launch {
