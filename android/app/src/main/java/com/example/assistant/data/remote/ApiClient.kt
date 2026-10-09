@@ -10,7 +10,7 @@ class ApiClient {
     private val http = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS) // backend timeout LLM là 30s
+        .readTimeout(65, TimeUnit.SECONDS) // backend timeout budget tối đa 52s-55s
         .build()
 
     private var cachedUrl: String? = null
