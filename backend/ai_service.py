@@ -7,7 +7,17 @@ from google import genai
 from google.genai import types
 
 from app.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_GENERATION_TIMEOUT_MS
-from app.exceptions import LLMUnavailableException, LLMTimeoutException
+from app.exceptions import (
+    LLMUnavailableException,
+    LLMTimeoutException,
+    LLMQuotaExhaustedException,
+    is_quota_exhausted_exception,
+)
+from app.services.personality import (
+    ANNA_SYSTEM_PROMPT,
+    ALLOWED_EMOTIONS,
+    normalize_emotion,
+)
 
 # Only create a Google GenAI client when a Gemini key is configured.
 client = genai.Client(
@@ -15,15 +25,8 @@ client = genai.Client(
     http_options=types.HttpOptions(api_version="v1", timeout=GEMINI_GENERATION_TIMEOUT_MS),
 ) if GEMINI_API_KEY else None
 
-ALLOWED_EMOTIONS = ["neutral", "happy", "sad", "surprised"]
+SYSTEM_PROMPT = ANNA_SYSTEM_PROMPT
 
-SYSTEM_PROMPT = """Bạn là một trợ lý ảo trên điện thoại Android, có hình dáng một nhân vật anime.
-Hãy trả lời bằng tiếng Việt một cách tự nhiên, ngắn gọn và rõ ràng.
-Tuyệt đối không tự nhận là đã thực hiện các thao tác trên điện thoại hay laptop vì bạn chưa được cung cấp công cụ (tool) để làm việc đó.
-Phản hồi của bạn BẮT BUỘC phải là một JSON hợp lệ với 2 trường:
-- "reply": Nội dung câu trả lời.
-- "emotion": Cảm xúc của bạn, CHỈ ĐƯỢC CHỌN MỘT TRONG CÁC TỪ SAU: "neutral", "happy", "sad", "surprised".
-"""
 
 def generate_reply(
     context: List[Dict[str, str]], message: str, rag_context: str | None = None
@@ -55,7 +58,7 @@ def generate_reply(
                     f"{SYSTEM_PROMPT}\n\n{rag_context}" if rag_context else SYSTEM_PROMPT
                 ),
                 response_mime_type="application/json",
-            )
+            ),
         )
 
         # 4. Parse kết quả trả về
@@ -66,20 +69,21 @@ def generate_reply(
         if not reply or not isinstance(reply, str) or not reply.strip():
             raise LLMUnavailableException("LLM trả về câu trả lời rỗng hoặc không hợp lệ.")
 
-        emotion = result_json.get("emotion")
-        if not isinstance(emotion, str) or emotion.lower() not in ALLOWED_EMOTIONS:
-            emotion = "neutral"
+        emotion = normalize_emotion(result_json.get("emotion"))
 
-        return reply.strip(), emotion.lower()
+        return reply.strip(), emotion
 
     except json.JSONDecodeError:
         logging.error("[AI Service Error] Malformed JSON response.")
         raise LLMUnavailableException("Dữ liệu LLM trả về không đúng định dạng.")
     except Exception as e:
+        if is_quota_exhausted_exception(e):
+            logging.warning("[AI Service Error] Provider quota or rate limit exhausted.")
+            raise LLMQuotaExhaustedException("AI quota exhausted")
         error_msg = str(e).lower()
-        if "timeout" in error_msg or "timed out" in error_msg:
+        if isinstance(e, TimeoutError) or "timeout" in error_msg or "timed out" in error_msg:
             logging.error("[AI Service Error] Request timed out.")
             raise LLMTimeoutException("Không thể kết nối AI do quá thời gian.")
         else:
-            logging.error(f"[AI Service Error] API failed: {str(e)}")
+            logging.error(f"[AI Service Error] API failed: {type(e).__name__}")
             raise LLMUnavailableException("Không thể kết nối AI.")

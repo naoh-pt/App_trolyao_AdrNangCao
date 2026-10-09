@@ -58,6 +58,55 @@ class LLMTimeoutException(APIException):
         super().__init__(status_code=504, code="LLM_TIMEOUT", message=message)
 
 
+class LLMQuotaExhaustedException(APIException):
+    def __init__(self, message: str = "Dịch vụ AI tạm thời vượt quá giới hạn lượt dùng"):
+        super().__init__(status_code=429, code="QUOTA_EXHAUSTED", message=message)
+
+
+def is_quota_exhausted_exception(exc: Exception) -> bool:
+    """Classify whether an exception confidently represents an AI provider quota/rate-limit error.
+
+    Checks structured HTTP status code 429 or status string RESOURCE_EXHAUSTED.
+    Does NOT match timeouts, 503 unavailable, authentication errors (401/403), or generic errors.
+    """
+    if isinstance(exc, LLMQuotaExhaustedException):
+        return True
+
+    # 1. Direct structured HTTP status codes on the exception
+    direct_code = getattr(exc, "status_code", None) or getattr(exc, "code", None) or getattr(exc, "http_status", None)
+    if direct_code == 429:
+        return True
+
+    # 2. Structured status string (e.g. RESOURCE_EXHAUSTED)
+    status_str = str(getattr(exc, "status", "") or getattr(exc, "reason", "") or "").strip().upper()
+    if status_str == "RESOURCE_EXHAUSTED":
+        return True
+
+    # 3. Response object inspection (requests / httpx)
+    response = getattr(exc, "response", None)
+    if response is not None:
+        resp_code = getattr(response, "status_code", None) or getattr(response, "code", None)
+        if resp_code == 429:
+            return True
+
+    # 4. Details dictionary inspection (e.g. Google GenAI APIError.details)
+    details = getattr(exc, "details", None)
+    if isinstance(details, dict):
+        det_code = details.get("code")
+        det_status = str(details.get("status", "")).strip().upper()
+        if det_code == 429 or det_status == "RESOURCE_EXHAUSTED":
+            return True
+        error_dict = details.get("error")
+        if isinstance(error_dict, dict):
+            err_code = error_dict.get("code")
+            err_status = str(error_dict.get("status", "")).strip().upper()
+            if err_code == 429 or err_status == "RESOURCE_EXHAUSTED":
+                return True
+
+    return False
+
+
+
 class RequestInProgressException(APIException):
     def __init__(self):
         super().__init__(503, "REQUEST_IN_PROGRESS", "Yêu cầu đang xử lý; vui lòng thử lại với cùng request_id")

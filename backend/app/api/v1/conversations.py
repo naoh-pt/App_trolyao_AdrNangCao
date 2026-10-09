@@ -29,8 +29,10 @@ import ai_service
 from app.config import RAG_ENABLED, USE_REAL_AI
 import app.services.mock_ai as mock_ai
 from app.services.rag_service import prompt_context, retrieve
-from app.exceptions import RAGUnavailableException
+from app.exceptions import RAGUnavailableException, is_quota_exhausted_exception
 from app.services.request_guard import own_request
+from app.services.quick_reply_service import get_quick_reply
+from app.services.personality import ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION
 from app.utils.time import utc_now_iso
 
 router = APIRouter(tags=["Conversations"])
@@ -274,37 +276,52 @@ def send_message(
         if saved is not None:
             return saved
 
-        rows = db.execute(
-            """SELECT role, text, emotion FROM (
-                   SELECT role, text, emotion, created_at, rowid
-                   FROM messages WHERE conversation_id = ?
-                   ORDER BY CASE
+        # Check deterministic quick replies first (skips context, RAG, and AI)
+        quick_reply = get_quick_reply(normalized_msg)
+        if quick_reply is not None:
+            reply_text, reply_emotion = quick_reply
+            retrieved = []
+        else:
+            rows = db.execute(
+                """SELECT role, text, emotion FROM (
+                       SELECT role, text, emotion, created_at, rowid
+                       FROM messages WHERE conversation_id = ?
+                       ORDER BY CASE
+                           WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
+                           ELSE created_at
+                       END DESC, rowid DESC LIMIT 10
+                   ) ORDER BY CASE
                        WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
                        ELSE created_at
-                   END DESC, rowid DESC LIMIT 10
-               ) ORDER BY CASE
-                   WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
-                   ELSE created_at
-               END ASC, rowid ASC""",
-            (conv_id,),
-        ).fetchall()
-        context = [
-            {"role": row["role"], "text": row["text"], "emotion": row["emotion"]}
-            for row in rows
-        ]
-        retrieved = []
-        if USE_REAL_AI:
-            if RAG_ENABLED:
-                try:
-                    retrieved = retrieve(normalized_msg)
-                except RAGUnavailableException as exc:
-                    logging.warning("RAG unavailable (%s); continuing with normal Gemini reply", exc.category)
-            result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
-        else:
-            result = mock_ai.generate_reply(context, normalized_msg)
-        if not isinstance(result, (tuple, list)) or len(result) != 2:
-            raise InvalidAIReplyException()
-        reply_text, reply_emotion = result
+                   END ASC, rowid ASC""",
+                (conv_id,),
+            ).fetchall()
+            context = [
+                {"role": row["role"], "text": row["text"], "emotion": row["emotion"]}
+                for row in rows
+            ]
+            retrieved = []
+            try:
+                if USE_REAL_AI:
+                    if RAG_ENABLED:
+                        try:
+                            retrieved = retrieve(normalized_msg)
+                        except RAGUnavailableException as exc:
+                            logging.warning("RAG unavailable (%s); continuing with normal Gemini reply", exc.category)
+                    result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
+                else:
+                    result = mock_ai.generate_reply(context, normalized_msg)
+            except Exception as exc:
+                if is_quota_exhausted_exception(exc):
+                    logging.warning("AI provider quota exhausted; using friendly Anna fallback")
+                    result = (ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION)
+                    retrieved = []
+                else:
+                    raise
+
+            if not isinstance(result, (tuple, list)) or len(result) != 2:
+                raise InvalidAIReplyException()
+            reply_text, reply_emotion = result
         if not isinstance(reply_text, str) or not reply_text.strip():
             raise InvalidAIReplyException()
         reply_text = reply_text.strip()
