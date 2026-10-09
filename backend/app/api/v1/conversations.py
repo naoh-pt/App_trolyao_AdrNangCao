@@ -2,6 +2,7 @@
 
 import sqlite3
 import uuid
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Response, status
 
@@ -23,10 +24,15 @@ from app.schemas.conversation import (
     SendMessageRequest,
     SendMessageResponse,
 )
+from app.schemas.knowledge import SourceResponse
 import ai_service
-from app.config import USE_REAL_AI
+from app.config import RAG_ENABLED, USE_REAL_AI
 import app.services.mock_ai as mock_ai
+from app.services.rag_service import prompt_context, retrieve
+from app.exceptions import RAGUnavailableException, is_quota_exhausted_exception
 from app.services.request_guard import own_request
+from app.services.quick_reply_service import get_quick_reply
+from app.services.personality import ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION
 from app.utils.time import utc_now_iso
 
 router = APIRouter(tags=["Conversations"])
@@ -189,6 +195,15 @@ def delete_conversation(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _sources_for_message(db: sqlite3.Connection, assistant_message_id: str) -> list[SourceResponse]:
+    rows = db.execute(
+        """SELECT document_id, filename, page_number, score FROM message_sources
+           WHERE assistant_message_id = ? ORDER BY score DESC""",
+        (assistant_message_id,),
+    ).fetchall()
+    return [SourceResponse(**dict(row)) for row in rows]
+
+
 def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id: str, message: str):
     """Return a committed pair, or None when this request ID is unused."""
     row = db.execute(
@@ -215,6 +230,7 @@ def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id
     return SendMessageResponse(
         user_message=MessageResponse(**dict(user)),
         assistant_message=MessageResponse(**dict(assistant)),
+        sources=_sources_for_message(db, assistant["id"]),
     )
 
 
@@ -260,31 +276,52 @@ def send_message(
         if saved is not None:
             return saved
 
-        rows = db.execute(
-            """SELECT role, text, emotion FROM (
-                   SELECT role, text, emotion, created_at, rowid
-                   FROM messages WHERE conversation_id = ?
-                   ORDER BY CASE
+        # Check deterministic quick replies first (skips context, RAG, and AI)
+        quick_reply = get_quick_reply(normalized_msg)
+        if quick_reply is not None:
+            reply_text, reply_emotion = quick_reply
+            retrieved = []
+        else:
+            rows = db.execute(
+                """SELECT role, text, emotion FROM (
+                       SELECT role, text, emotion, created_at, rowid
+                       FROM messages WHERE conversation_id = ?
+                       ORDER BY CASE
+                           WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
+                           ELSE created_at
+                       END DESC, rowid DESC LIMIT 10
+                   ) ORDER BY CASE
                        WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
                        ELSE created_at
-                   END DESC, rowid DESC LIMIT 10
-               ) ORDER BY CASE
-                   WHEN length(created_at) = 20 THEN substr(created_at, 1, 19) || '.000000Z'
-                   ELSE created_at
-               END ASC, rowid ASC""",
-            (conv_id,),
-        ).fetchall()
-        context = [
-            {"role": row["role"], "text": row["text"], "emotion": row["emotion"]}
-            for row in rows
-        ]
-        if USE_REAL_AI:
-            result = ai_service.generate_reply(context, normalized_msg)
-        else:
-            result = mock_ai.generate_reply(context, normalized_msg)
-        if not isinstance(result, (tuple, list)) or len(result) != 2:
-            raise InvalidAIReplyException()
-        reply_text, reply_emotion = result
+                   END ASC, rowid ASC""",
+                (conv_id,),
+            ).fetchall()
+            context = [
+                {"role": row["role"], "text": row["text"], "emotion": row["emotion"]}
+                for row in rows
+            ]
+            retrieved = []
+            try:
+                if USE_REAL_AI:
+                    if RAG_ENABLED:
+                        try:
+                            retrieved = retrieve(normalized_msg)
+                        except RAGUnavailableException as exc:
+                            logging.warning("RAG unavailable (%s); continuing with normal Gemini reply", exc.category)
+                    result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
+                else:
+                    result = mock_ai.generate_reply(context, normalized_msg)
+            except Exception as exc:
+                if is_quota_exhausted_exception(exc):
+                    logging.warning("AI provider quota exhausted; using friendly Anna fallback")
+                    result = (ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION)
+                    retrieved = []
+                else:
+                    raise
+
+            if not isinstance(result, (tuple, list)) or len(result) != 2:
+                raise InvalidAIReplyException()
+            reply_text, reply_emotion = result
         if not isinstance(reply_text, str) or not reply_text.strip():
             raise InvalidAIReplyException()
         reply_text = reply_text.strip()
@@ -320,6 +357,20 @@ def send_message(
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
                     (req_id, client_id, conv_id, normalized_msg, user_msg_id, asst_msg_id, now_ts),
                 )
+                for source in retrieved:
+                    db.execute(
+                        """INSERT INTO message_sources
+                           (assistant_message_id, document_id, chunk_id, filename, page_number, score)
+                           VALUES (?, ?, ?, ?, ?, ?)""",
+                        (
+                            asst_msg_id,
+                            source.document_id,
+                            source.chunk_id,
+                            source.filename,
+                            source.page_number,
+                            source.score,
+                        ),
+                    )
                 db.execute(
                     "UPDATE conversations SET updated_at = ? WHERE id = ? AND client_id = ?",
                     (now_ts, conv_id, client_id),
@@ -346,4 +397,13 @@ def send_message(
                 id=asst_msg_id, role="assistant", text=reply_text,
                 emotion=reply_emotion, created_at=now_ts
             ),
+            sources=[
+                SourceResponse(
+                    document_id=item.document_id,
+                    filename=item.filename,
+                    page_number=item.page_number,
+                    score=item.score,
+                )
+                for item in retrieved
+            ],
         )

@@ -21,7 +21,7 @@ def _chat(client):
     return headers, conv.json()["id"]
 
 
-def _send(client, headers, conv_id, message="hello", request_id=None):
+def _send(client, headers, conv_id, message="câu hỏi kiểm tra", request_id=None):
     return client.post(
         f"/api/v1/conversations/{conv_id}/messages",
         headers=headers,
