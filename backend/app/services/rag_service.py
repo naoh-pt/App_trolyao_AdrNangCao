@@ -35,7 +35,11 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 # The embedding request has its own timeout; generation uses a separate client.
 embedding_client = genai.Client(
     api_key=GEMINI_API_KEY,
-    http_options=types.HttpOptions(api_version="v1", timeout=RAG_TIMEOUT_MS),
+    http_options=types.HttpOptions(
+        api_version="v1",
+        timeout=RAG_TIMEOUT_MS,
+        retry_options=types.HttpRetryOptions(attempts=1),
+    ),
 ) if GEMINI_API_KEY and RAG_ENABLED else None
 
 

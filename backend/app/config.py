@@ -25,10 +25,31 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _as_int(value: str | None, default: int) -> int:
+    """Parse environment integer values with fallback."""
+    if value is None:
+        return default
+    try:
+        return int(value.strip())
+    except (ValueError, TypeError):
+        return default
+
+
 USE_REAL_AI = _as_bool(os.getenv("USE_REAL_AI"), default=False)
+
+# Provider selection
+AI_PRIMARY_PROVIDER = os.getenv("AI_PRIMARY_PROVIDER", "gemini")
+AI_FALLBACK_PROVIDER = os.getenv("AI_FALLBACK_PROVIDER", "groq")
+
+# Gemini settings
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
 GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
+
+# Groq settings
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+
 
 def read_timeout_config(environ: Mapping[str, str]) -> tuple[int, int]:
     """Return generation and embedding timeouts within the demo request budget.
@@ -57,6 +78,9 @@ def read_timeout_config(environ: Mapping[str, str]) -> tuple[int, int]:
 GEMINI_GENERATION_TIMEOUT_MS, RAG_TIMEOUT_MS = read_timeout_config(os.environ)
 # Preserve the old exported name for code importing app.config.GEMINI_TIMEOUT_MS.
 GEMINI_TIMEOUT_MS = GEMINI_GENERATION_TIMEOUT_MS
+
+GROQ_TIMEOUT_MS = _as_int(os.getenv("GROQ_TIMEOUT_MS"), 15000)
+AI_TOTAL_TIMEOUT_MS = _as_int(os.getenv("AI_TOTAL_TIMEOUT_MS"), 55000)
 
 RAG_ENABLED = _as_bool(os.getenv("RAG_ENABLED"), default=False)
 RAG_ADMIN_TOKEN = os.getenv("RAG_ADMIN_TOKEN")
