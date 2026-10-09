@@ -69,7 +69,8 @@ class InvalidAIReplyException(APIException):
 
 
 class RAGUnavailableException(APIException):
-    def __init__(self, message: str = "Kho kiến thức hiện chưa sẵn sàng"):
+    def __init__(self, message: str = "Kho kiến thức hiện chưa sẵn sàng", *, category: str = "unavailable"):
+        self.category = category
         super().__init__(503, "RAG_UNAVAILABLE", message)
 
 

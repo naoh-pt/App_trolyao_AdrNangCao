@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import math
 import re
 import sqlite3
 import uuid
@@ -11,16 +12,18 @@ from dataclasses import dataclass
 from typing import Any
 
 from pypdf import PdfReader
+from google import genai
 from google.genai import types
 
-from ai_service import client as gemini_client
 from app.config import (
+    GEMINI_API_KEY,
     GEMINI_EMBEDDING_MODEL,
     RAG_CHROMA_PATH,
     RAG_COLLECTION,
     RAG_ENABLED,
     RAG_MIN_SCORE,
     RAG_TOP_K,
+    RAG_TIMEOUT_MS,
 )
 from app.exceptions import InvalidDocumentException, RAGUnavailableException
 from app.utils.time import utc_now_iso
@@ -28,6 +31,12 @@ from app.utils.time import utc_now_iso
 CHUNK_SIZE = 1_800
 CHUNK_OVERLAP = 250
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+
+# The embedding request has its own timeout; generation uses a separate client.
+embedding_client = genai.Client(
+    api_key=GEMINI_API_KEY,
+    http_options=types.HttpOptions(api_version="v1", timeout=RAG_TIMEOUT_MS),
+) if GEMINI_API_KEY and RAG_ENABLED else None
 
 
 @dataclass(frozen=True)
@@ -44,8 +53,8 @@ def _collection():
     """Open the persistent vector collection only when RAG is enabled."""
     if not RAG_ENABLED:
         return None
-    if gemini_client is None:
-        raise RAGUnavailableException("Chưa cấu hình GEMINI_API_KEY cho RAG")
+    if embedding_client is None:
+        raise RAGUnavailableException("Chưa cấu hình GEMINI_API_KEY cho RAG", category="missing_key")
     try:
         import chromadb
 
@@ -55,21 +64,21 @@ def _collection():
             metadata={"hnsw:space": "cosine"},
         )
     except ImportError as exc:
-        raise RAGUnavailableException("Thiếu package chromadb; hãy cài requirements.txt") from exc
+        raise RAGUnavailableException("Thiếu package chromadb; hãy cài requirements.txt", category="collection_open") from exc
     except Exception as exc:
-        raise RAGUnavailableException("Không thể mở kho vector RAG") from exc
+        raise RAGUnavailableException("Không thể mở kho vector RAG", category="collection_open") from exc
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
-    if gemini_client is None:
-        raise RAGUnavailableException("Chưa cấu hình GEMINI_API_KEY cho RAG")
+    if embedding_client is None:
+        raise RAGUnavailableException("Chưa cấu hình GEMINI_API_KEY cho RAG", category="missing_key")
     try:
         # Gemini Embedding 2 currently returns one embedding per request in
         # this SDK/API path. Calling it per chunk prevents a single vector from
         # being incorrectly paired with many Chroma documents.
         vectors: list[list[float]] = []
         for text in texts:
-            response = gemini_client.models.embed_content(
+            response = embedding_client.models.embed_content(
                 model=GEMINI_EMBEDDING_MODEL,
                 contents=text,
                 config=types.EmbedContentConfig(output_dimensionality=768),
@@ -79,7 +88,7 @@ def _embed(texts: list[str]) -> list[list[float]]:
             vectors.append(list(response.embeddings[0].values))
         return vectors
     except Exception as exc:
-        raise RAGUnavailableException("Không thể tạo embedding cho tài liệu") from exc
+        raise RAGUnavailableException("Không thể tạo embedding cho tài liệu", category="embedding") from exc
 
 
 def _chunks_for_page(text: str) -> list[str]:
@@ -163,24 +172,64 @@ def retrieve(question: str) -> list[RetrievedChunk]:
     if not RAG_ENABLED:
         return []
     collection = _collection()
-    if collection.count() == 0:
+    try:
+        count = collection.count()
+    except Exception as exc:
+        raise RAGUnavailableException(category="collection_count") from exc
+    if not isinstance(count, int) or count < 0:
+        raise RAGUnavailableException(category="invalid_result")
+    if count == 0:
         return []
-    query_embedding = _embed([question])[0]
-    result = collection.query(query_embeddings=[query_embedding], n_results=RAG_TOP_K, include=["documents", "metadatas", "distances"])
+    query_vectors = _embed([question])
+    if len(query_vectors) != 1:
+        raise RAGUnavailableException(category="embedding")
+    query_embedding = query_vectors[0]
+    try:
+        result = collection.query(query_embeddings=[query_embedding], n_results=RAG_TOP_K, include=["documents", "metadatas", "distances"])
+    except Exception as exc:
+        raise RAGUnavailableException(category="collection_query") from exc
+    try:
+        ids, documents, metadatas, distances = (
+            result[key][0] for key in ("ids", "documents", "metadatas", "distances")
+        )
+        if not all(isinstance(items, (list, tuple)) for items in (ids, documents, metadatas, distances)):
+            raise ValueError("Invalid result arrays")
+        if not (len(ids) == len(documents) == len(metadatas) == len(distances)):
+            raise ValueError("Inconsistent result arrays")
+    except (TypeError, KeyError, IndexError, ValueError) as exc:
+        raise RAGUnavailableException(category="invalid_result") from exc
     chunks: list[RetrievedChunk] = []
-    for chunk_id, text, metadata, distance in zip(
-        result["ids"][0], result["documents"][0], result["metadatas"][0], result["distances"][0]
-    ):
-        score = 1.0 - float(distance)
-        if score >= RAG_MIN_SCORE:
-            chunks.append(RetrievedChunk(
-                chunk_id=chunk_id,
-                document_id=str(metadata["document_id"]),
-                filename=str(metadata["filename"]),
-                page_number=int(metadata["page_number"]),
-                text=str(text),
-                score=score,
-            ))
+    try:
+        for chunk_id, text, metadata, distance in zip(ids, documents, metadatas, distances):
+            if not isinstance(chunk_id, str) or not chunk_id:
+                raise ValueError("Invalid chunk ID")
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError("Invalid document text")
+            if not isinstance(metadata, dict):
+                raise ValueError("Invalid document metadata")
+            document_id = metadata["document_id"]
+            filename = metadata["filename"]
+            page_number = metadata["page_number"]
+            if not isinstance(document_id, str) or not document_id:
+                raise ValueError("Invalid document ID")
+            if not isinstance(filename, str) or not filename:
+                raise ValueError("Invalid filename")
+            if type(page_number) is not int or page_number <= 0:
+                raise ValueError("Invalid page number")
+            if isinstance(distance, bool) or not isinstance(distance, (int, float)) or not math.isfinite(distance):
+                raise ValueError("Invalid distance")
+            score = 1.0 - float(distance)
+            if score >= RAG_MIN_SCORE:
+                chunks.append(RetrievedChunk(
+                    chunk_id=chunk_id,
+                    document_id=document_id,
+                    filename=filename,
+                    page_number=page_number,
+                    text=text,
+                    score=score,
+                ))
+    except (TypeError, KeyError, ValueError, OverflowError) as exc:
+        raise RAGUnavailableException(category="invalid_result") from exc
     return chunks
 
 

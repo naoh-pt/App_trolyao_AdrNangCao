@@ -220,18 +220,47 @@ curl.exe -i -X DELETE "http://127.0.0.1:8000/api/v1/conversations/$convId" `
    ```env
    GEMINI_API_KEY=your_gemini_api_key
    GEMINI_MODEL=gemini-3.5-flash
-   GEMINI_TIMEOUT_MS=60000
+   GEMINI_GENERATION_TIMEOUT_MS=38000
+   RAG_TIMEOUT_MS=9000
    USE_REAL_AI=true
    ```
 
 3. Cài/cập nhật dependency rồi chạy server:
 
    ```powershell
-   .\my_venv\Scripts\python.exe -m pip install -r requirements.txt
-   .\my_venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
 
 `app.config` tự nạp `backend/.env`, kể cả khi Uvicorn chạy với `--reload`. Để dùng Mock AI cho demo/test, đặt `USE_REAL_AI=false` rồi khởi động lại server.
+
+### Giới hạn thời gian và số worker cho demo
+
+`GEMINI_GENERATION_TIMEOUT_MS` mặc định 38.000 ms; `RAG_TIMEOUT_MS` mặc định
+9.000 ms cho mỗi request embedding. `GEMINI_TIMEOUT_MS` cũ vẫn được nhận như
+alias của generation nếu biến mới chưa được đặt. Config yêu cầu mỗi timeout
+dương và tổng không quá 55.000 ms. Với một truy vấn chat thông thường, có
+thể có một request embedding rồi một request generation; tổng mặc định 47 giây,
+để dành biên cho Android dự kiến chờ khoảng 65 giây ở giai đoạn tích hợp sau.
+Android hiện vẫn chờ 45 giây, vì vậy các câu trả lời chậm vẫn có thể timeout
+trên bản Android hiện tại. Các lời gọi Chroma đồng bộ và xử lý phụ trợ chưa có
+deadline/cancellation toàn request; timeout SDK chỉ giới hạn từng HTTP call.
+Import PDF có thể gọi embedding nhiều lần nên không nằm trong budget chat này.
+
+Chạy demo với đúng một worker:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+```
+
+Khi phát triển với reload:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Phiên bản demo dùng khóa `request_id` trong bộ nhớ tiến trình; nhiều worker
+có thể cùng gọi provider cho một request ID trước khi SQLite chặn ghi trùng.
 
 ## RAG: Sổ tay sinh viên
 

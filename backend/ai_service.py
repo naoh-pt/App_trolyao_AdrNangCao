@@ -6,13 +6,13 @@ from typing import List, Dict, Tuple
 from google import genai
 from google.genai import types
 
-from app.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_TIMEOUT_MS
+from app.config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_GENERATION_TIMEOUT_MS
 from app.exceptions import LLMUnavailableException, LLMTimeoutException
 
 # Only create a Google GenAI client when a Gemini key is configured.
 client = genai.Client(
     api_key=GEMINI_API_KEY,
-    http_options=types.HttpOptions(api_version="v1", timeout=GEMINI_TIMEOUT_MS),
+    http_options=types.HttpOptions(api_version="v1", timeout=GEMINI_GENERATION_TIMEOUT_MS),
 ) if GEMINI_API_KEY else None
 
 ALLOWED_EMOTIONS = ["neutral", "happy", "sad", "surprised"]

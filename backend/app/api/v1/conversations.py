@@ -26,7 +26,7 @@ from app.schemas.conversation import (
 )
 from app.schemas.knowledge import SourceResponse
 import ai_service
-from app.config import USE_REAL_AI
+from app.config import RAG_ENABLED, USE_REAL_AI
 import app.services.mock_ai as mock_ai
 from app.services.rag_service import prompt_context, retrieve
 from app.exceptions import RAGUnavailableException
@@ -294,10 +294,11 @@ def send_message(
         ]
         retrieved = []
         if USE_REAL_AI:
-            try:
-                retrieved = retrieve(normalized_msg)
-            except RAGUnavailableException:
-                logging.warning("RAG unavailable; continuing with normal Gemini reply", exc_info=True)
+            if RAG_ENABLED:
+                try:
+                    retrieved = retrieve(normalized_msg)
+                except RAGUnavailableException as exc:
+                    logging.warning("RAG unavailable (%s); continuing with normal Gemini reply", exc.category)
             result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
         else:
             result = mock_ai.generate_reply(context, normalized_msg)
