@@ -6,6 +6,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.assistant.assistantApp
 import com.example.assistant.data.local.MessageEntity
+import com.example.assistant.data.local.SettingsStore
 import com.example.assistant.data.repo.ChatRepository
 import com.example.assistant.domain.CharacterState
 import com.example.assistant.domain.Emotion
@@ -27,7 +28,14 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 private const val MAX_LEN = 2000
-private const val TALKING_MS = 2000L
+
+/** Duration (in milliseconds) to briefly display the backend response emotion after speech completes, or when TTS is disabled. */
+const val EMOTION_DISPLAY_DURATION_MS = 1000L
+
+data class SpeechEvent(
+    val utteranceId: String,
+    val text: String,
+)
 
 data class ChatUiState(
     val characterState: CharacterState = CharacterState.IDLE,
@@ -62,10 +70,135 @@ fun ChatUiState.reduceAnimationFinished(): ChatUiState =
         this
     }
 
+/**
+ * Centralized coordinator for character animation state synchronized with TTS lifecycle.
+ *
+ * Guarantees:
+ * - Entering THINKING when user sends a message.
+ * - Looping TALK throughout active TTS duration.
+ * - Briefly showing response emotion (happy, sad, surprised) upon TTS completion, then returning to IDLE.
+ * - Directly returning to IDLE upon completion for neutral responses.
+ * - Safely showing emotion then IDLE when TTS is disabled or errors.
+ * - Stale callbacks from previous utterances are safely rejected via unique utterance IDs.
+ */
+class SpeechAnimationCoordinator(
+    initialState: CharacterState = CharacterState.IDLE,
+    initialEmotion: Emotion = Emotion.NEUTRAL,
+) {
+    var characterState: CharacterState = initialState
+        private set
+
+    var emotion: Emotion = initialEmotion
+        private set
+
+    var activeUtteranceId: String? = null
+        private set
+
+    var pendingResponseEmotion: Emotion = Emotion.NEUTRAL
+        private set
+
+    /** User sends a message -> enter THINKING and invalidate active speech. */
+    fun onUserSendMessage() {
+        activeUtteranceId = null
+        pendingResponseEmotion = Emotion.NEUTRAL
+        characterState = CharacterState.THINKING
+        emotion = Emotion.NEUTRAL
+    }
+
+    /**
+     * Backend reply received.
+     * If TTS is enabled, registers the utterance and remains THINKING until speech actually starts.
+     * If TTS is disabled, immediately shows the response emotion.
+     */
+    fun onReplyReceived(
+        utteranceId: String,
+        responseEmotion: Emotion,
+        ttsEnabled: Boolean,
+    ) {
+        pendingResponseEmotion = responseEmotion
+        if (ttsEnabled) {
+            activeUtteranceId = utteranceId
+            // Character remains in THINKING until onSpeechStarted
+        } else {
+            activeUtteranceId = null
+            characterState = CharacterState.TALKING
+            emotion = responseEmotion
+        }
+    }
+
+    /** TTS engine starts speaking the active utterance -> enter TALKING with NEUTRAL (loops "talk"). */
+    fun onSpeechStarted(utteranceId: String): Boolean {
+        if (utteranceId != activeUtteranceId) return false
+        characterState = CharacterState.TALKING
+        emotion = Emotion.NEUTRAL
+        return true
+    }
+
+    /**
+     * TTS engine finishes speaking the active utterance.
+     * Non-neutral emotion is displayed briefly; neutral returns directly to IDLE.
+     */
+    fun onSpeechCompleted(utteranceId: String): Boolean {
+        if (utteranceId != activeUtteranceId) return false
+        activeUtteranceId = null
+        val respEmotion = pendingResponseEmotion
+        if (respEmotion != Emotion.NEUTRAL) {
+            characterState = CharacterState.TALKING
+            emotion = respEmotion
+        } else {
+            characterState = CharacterState.IDLE
+            emotion = Emotion.NEUTRAL
+        }
+        return true
+    }
+
+    /** TTS reports error or failure to start -> safely exit TALKING. */
+    fun onSpeechError(utteranceId: String): Boolean {
+        if (utteranceId != activeUtteranceId) return false
+        activeUtteranceId = null
+        val respEmotion = pendingResponseEmotion
+        if (respEmotion != Emotion.NEUTRAL) {
+            characterState = CharacterState.TALKING
+            emotion = respEmotion
+        } else {
+            characterState = CharacterState.IDLE
+            emotion = Emotion.NEUTRAL
+        }
+        return true
+    }
+
+    /** Speech stopped/interrupted. */
+    fun onSpeechStopped(utteranceId: String): Boolean {
+        if (utteranceId != activeUtteranceId) return false
+        activeUtteranceId = null
+        characterState = CharacterState.IDLE
+        emotion = Emotion.NEUTRAL
+        return true
+    }
+
+    /** Called when the brief emotion display or one-shot animation finishes. */
+    fun onEmotionDisplayFinished() {
+        characterState = CharacterState.IDLE
+        emotion = Emotion.NEUTRAL
+    }
+
+    /** Full reset (new chat or screen disposed). */
+    fun onReset() {
+        activeUtteranceId = null
+        pendingResponseEmotion = Emotion.NEUTRAL
+        characterState = CharacterState.IDLE
+        emotion = Emotion.NEUTRAL
+    }
+}
+
 class ChatViewModel(
     private val repo: ChatRepository,
     initialConversationId: String?,
 ) : ViewModel() {
+
+    val coordinator = SpeechAnimationCoordinator()
+    var isTtsEnabled: Boolean = SettingsStore.DEFAULT_TTS_ENABLED
+        private set
 
     private val conversationId = MutableStateFlow(initialConversationId)
     private val _ui = MutableStateFlow(ChatUiState())
@@ -76,15 +209,23 @@ class ChatViewModel(
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repo.observeMessages(id) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _speechEvents = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 1)
+    private val _speechEvents = MutableSharedFlow<SpeechEvent>(replay = 0, extraBufferCapacity = 1)
     /** One-time speech events emitted strictly when a new assistant response is received. */
-    val speechEvents: SharedFlow<String> = _speechEvents.asSharedFlow()
+    val speechEvents: SharedFlow<SpeechEvent> = _speechEvents.asSharedFlow()
+
+    private val _stopSpeechEvents = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    /** Signal to immediately stop any active speech playback in UI layer. */
+    val stopSpeechEvents: SharedFlow<Unit> = _stopSpeechEvents.asSharedFlow()
 
     private var requestId: String? = null
     private var talkJob: Job? = null
 
     init {
         refresh()
+    }
+
+    fun setTtsEnabled(enabled: Boolean) {
+        isTtsEnabled = enabled
     }
 
     /** Tải lại từ server; nếu chưa có chat thì tạo mới. */
@@ -130,14 +271,16 @@ class ChatViewModel(
 
         talkJob?.cancel()
         talkJob = null
+        _stopSpeechEvents.tryEmit(Unit)
+        coordinator.onUserSendMessage()
         _ui.update {
             it.copy(
                 pending = text,
                 input = if (s.pending == null) "" else it.input,
                 error = null,
                 sending = true,
-                characterState = CharacterState.THINKING,
-                emotion = Emotion.NEUTRAL,
+                characterState = coordinator.characterState,
+                emotion = coordinator.emotion,
             )
         }
 
@@ -156,39 +299,100 @@ class ChatViewModel(
                 onSuccess = { reply ->
                     requestId = null
                     val emotion = Emotion.from(reply.emotion)
+                    val utteranceId = UUID.randomUUID().toString()
                     talkJob?.cancel()
                     talkJob = null
+
+                    val willSpeak = isTtsEnabled && reply.text.isNotBlank()
+                    coordinator.onReplyReceived(utteranceId, emotion, ttsEnabled = willSpeak)
                     _ui.update {
                         it.copy(
                             pending = null,
                             sending = false,
                             error = null,
-                            characterState = CharacterState.TALKING,
-                            emotion = emotion,
+                            characterState = coordinator.characterState,
+                            emotion = coordinator.emotion,
                         )
                     }
-                    if (reply.text.isNotBlank()) {
-                        _speechEvents.emit(reply.text)
-                    }
-                    if (emotion == Emotion.NEUTRAL) {
-                        talkJob = viewModelScope.launch {
-                            delay(TALKING_MS)
-                            _ui.update { current ->
-                                if (current.characterState == CharacterState.TALKING && current.emotion == Emotion.NEUTRAL) {
-                                    current.copy(
-                                        characterState = CharacterState.IDLE,
-                                        emotion = Emotion.NEUTRAL,
-                                    )
-                                } else {
-                                    current
-                                }
-                            }
-                        }
+
+                    if (willSpeak) {
+                        _speechEvents.emit(SpeechEvent(utteranceId, reply.text))
+                    } else {
+                        scheduleEmotionTimeoutIfNeeded()
                     }
                 },
                 onFailure = { fail(it) },
             )
         }
+    }
+
+    private fun scheduleEmotionTimeoutIfNeeded() {
+        talkJob?.cancel()
+        talkJob = null
+        if (coordinator.characterState == CharacterState.TALKING) {
+            talkJob = viewModelScope.launch {
+                delay(EMOTION_DISPLAY_DURATION_MS)
+                coordinator.onEmotionDisplayFinished()
+                _ui.update { current ->
+                    if (current.characterState == CharacterState.TALKING) {
+                        current.copy(
+                            characterState = coordinator.characterState,
+                            emotion = coordinator.emotion,
+                        )
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
+    fun onSpeechStarted(utteranceId: String) {
+        if (coordinator.onSpeechStarted(utteranceId)) {
+            talkJob?.cancel()
+            talkJob = null
+            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+        }
+    }
+
+    fun onSpeechCompleted(utteranceId: String) {
+        if (coordinator.onSpeechCompleted(utteranceId)) {
+            talkJob?.cancel()
+            talkJob = null
+            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+            scheduleEmotionTimeoutIfNeeded()
+        }
+    }
+
+    fun onSpeechError(utteranceId: String) {
+        if (coordinator.onSpeechError(utteranceId)) {
+            talkJob?.cancel()
+            talkJob = null
+            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+            scheduleEmotionTimeoutIfNeeded()
+        }
+    }
+
+    fun onSpeechStopped(utteranceId: String) {
+        if (coordinator.onSpeechStopped(utteranceId)) {
+            talkJob?.cancel()
+            talkJob = null
+            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+        }
+    }
+
+    fun onSpeechNotStarted(utteranceId: String) {
+        if (coordinator.activeUtteranceId == utteranceId) {
+            onSpeechError(utteranceId)
+        }
+    }
+
+    fun onScreenDisposed() {
+        talkJob?.cancel()
+        talkJob = null
+        coordinator.onReset()
+        _stopSpeechEvents.tryEmit(Unit)
+        _ui.update { it.copy(characterState = CharacterState.IDLE, emotion = Emotion.NEUTRAL) }
     }
 
     /**
@@ -202,12 +406,15 @@ class ChatViewModel(
         }
         talkJob?.cancel()
         talkJob = null
+        coordinator.onEmotionDisplayFinished()
         _ui.update { it.reduceAnimationFinished() }
     }
 
     private fun fail(e: Throwable?) {
         talkJob?.cancel()
         talkJob = null
+        coordinator.onReset()
+        _stopSpeechEvents.tryEmit(Unit)
         _ui.update {
             it.copy(
                 sending = false,
@@ -230,6 +437,8 @@ class ChatViewModel(
         talkJob = null
         requestId = null
         conversationId.value = null
+        coordinator.onReset()
+        _stopSpeechEvents.tryEmit(Unit)
         _ui.value = ChatUiState()
         refresh()
     }
