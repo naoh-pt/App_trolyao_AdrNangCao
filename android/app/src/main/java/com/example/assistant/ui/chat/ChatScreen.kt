@@ -45,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -61,6 +62,7 @@ import com.example.assistant.domain.LocalChatDisplaySettings
 import com.example.assistant.domain.LocalSpeechSettings
 import com.example.assistant.domain.SpeechSettings
 import com.example.assistant.speech.LocalTtsEnabled
+import com.example.assistant.speech.TtsProgressListener
 import com.example.assistant.speech.rememberVietnameseTts
 import com.example.assistant.ui.components.CharacterAvatar
 import com.example.assistant.ui.components.CuteBackground
@@ -118,17 +120,56 @@ fun ChatScreen(
 
     val ttsHelper = rememberVietnameseTts()
 
+    DisposableEffect(ttsHelper, vm) {
+        ttsHelper.listener = object : TtsProgressListener {
+            override fun onStart(utteranceId: String) {
+                vm.onSpeechStarted(utteranceId)
+            }
+
+            override fun onDone(utteranceId: String) {
+                vm.onSpeechCompleted(utteranceId)
+            }
+
+            override fun onError(utteranceId: String, errorCode: Int?) {
+                vm.onSpeechError(utteranceId)
+            }
+
+            override fun onStop(utteranceId: String, interrupted: Boolean) {
+                vm.onSpeechStopped(utteranceId)
+            }
+        }
+        onDispose {
+            ttsHelper.listener = null
+            ttsHelper.stop()
+            vm.onScreenDisposed()
+        }
+    }
+
     LaunchedEffect(speechSettings.enabled) {
+        vm.setTtsEnabled(speechSettings.enabled)
         if (!speechSettings.enabled) {
             ttsHelper.stop()
         }
     }
 
     LaunchedEffect(vm, speechSettings) {
-        vm.speechEvents.collect { text ->
-            if (speechSettings.enabled) {
-                ttsHelper.speak(text, speechSettings.speechRate, speechSettings.pitch)
+        vm.speechEvents.collect { event ->
+            if (speechSettings.enabled && event.text.isNotBlank()) {
+                ttsHelper.speak(
+                    text = event.text,
+                    rate = speechSettings.speechRate,
+                    pitch = speechSettings.pitch,
+                    utteranceId = event.utteranceId,
+                )
+            } else {
+                vm.onSpeechNotStarted(event.utteranceId)
             }
+        }
+    }
+
+    LaunchedEffect(vm) {
+        vm.stopSpeechEvents.collect {
+            ttsHelper.stop()
         }
     }
 
