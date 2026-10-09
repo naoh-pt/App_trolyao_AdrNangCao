@@ -53,10 +53,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.assistant.R
 import com.example.assistant.domain.ChatDisplaySettings
 import com.example.assistant.domain.LocalChatDisplaySettings
 import com.example.assistant.domain.LocalSpeechSettings
@@ -119,6 +128,32 @@ fun ChatScreen(
     val error = ui.error
 
     val ttsHelper = rememberVietnameseTts()
+    val context = LocalContext.current
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val recognizedText = extractSpeechRecognitionResult(result.resultCode, result.data)
+        vm.onVoiceInputResult(recognizedText)
+    }
+
+    val canVoiceInput = ui.online && !ui.sending && pending == null
+    val onLaunchVoiceInput: () -> Unit = {
+        if (canVoiceInput) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Mời bạn nói câu hỏi")
+            }
+            try {
+                voiceLauncher.launch(intent)
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(context, "Thiết bị chưa hỗ trợ nhập bằng giọng nói.", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Không thể khởi động nhận dạng giọng nói: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     DisposableEffect(ttsHelper, vm) {
         ttsHelper.listener = object : TtsProgressListener {
@@ -332,6 +367,16 @@ fun ChatScreen(
                                         disabledContainerColor = Color(0xFFF1F1F4),
                                     ),
                                 )
+                                IconButton(
+                                    onClick = onLaunchVoiceInput,
+                                    enabled = canVoiceInput,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mic),
+                                        contentDescription = "Nhập bằng giọng nói",
+                                        tint = if (canVoiceInput) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+                                    )
+                                }
                                 FilledIconButton(onClick = vm::send, enabled = canSend, shape = CircleShape) {
                                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Gửi")
                                 }

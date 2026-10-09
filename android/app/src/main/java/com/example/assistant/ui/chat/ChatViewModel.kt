@@ -1,5 +1,8 @@
 package com.example.assistant.ui.chat
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -69,6 +72,36 @@ fun ChatUiState.reduceAnimationFinished(): ChatUiState =
     } else {
         this
     }
+
+/**
+ * Pure parsing of speech recognition results.
+ * Returns the first trimmed, non-blank match if [resultCode] is [Activity.RESULT_OK], otherwise null.
+ */
+fun extractSpeechRecognitionText(resultCode: Int, results: List<String>?): String? {
+    if (resultCode != Activity.RESULT_OK) return null
+    val best = results?.firstOrNull()?.trim()
+    return if (!best.isNullOrBlank()) best else null
+}
+
+/**
+ * Pure state reducer determining updated text input from speech recognition.
+ * If [recognizedText] is non-blank, returns it trimmed; otherwise preserves [currentText].
+ */
+fun reduceVoiceInput(currentText: String, recognizedText: String?): String =
+    if (!recognizedText.isNullOrBlank()) {
+        recognizedText.trim()
+    } else {
+        currentText
+    }
+
+/**
+ * Extracts recognized speech text from Android speech recognizer activity result.
+ */
+fun extractSpeechRecognitionResult(resultCode: Int, data: Intent?): String? {
+    if (resultCode != Activity.RESULT_OK || data == null) return null
+    val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+    return extractSpeechRecognitionText(resultCode, results)
+}
 
 /**
  * Centralized coordinator for character animation state synchronized with TTS lifecycle.
@@ -259,6 +292,15 @@ class ChatViewModel(
 
     fun onInputChange(text: String) {
         _ui.update { s -> s.copy(input = text.take(MAX_LEN)) }
+    }
+
+    /**
+     * Updates input text with recognized voice input result without sending automatically.
+     * Preserves existing input if [recognizedText] is null or blank.
+     */
+    fun onVoiceInputResult(recognizedText: String?) {
+        val updated = reduceVoiceInput(_ui.value.input, recognizedText)
+        onInputChange(updated)
     }
 
     fun send() {
