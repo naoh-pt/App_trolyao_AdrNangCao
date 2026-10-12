@@ -53,10 +53,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.assistant.R
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ElevatedButton
+import androidx.compose.ui.text.font.FontWeight
+import com.example.assistant.data.remote.AssistantActionDto
+import com.example.assistant.domain.LocalAnimationFpsSettings
 import com.example.assistant.domain.ChatDisplaySettings
 import com.example.assistant.domain.LocalChatDisplaySettings
 import com.example.assistant.domain.LocalSpeechSettings
@@ -119,6 +134,32 @@ fun ChatScreen(
     val error = ui.error
 
     val ttsHelper = rememberVietnameseTts()
+    val context = LocalContext.current
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val recognizedText = extractSpeechRecognitionResult(result.resultCode, result.data)
+        vm.onVoiceInputResult(recognizedText)
+    }
+
+    val canVoiceInput = ui.online && !ui.sending && pending == null
+    val onLaunchVoiceInput: () -> Unit = {
+        if (canVoiceInput) {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
+                putExtra(RecognizerIntent.EXTRA_PROMPT, "Mời bạn nói câu hỏi")
+            }
+            try {
+                voiceLauncher.launch(intent)
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(context, "Thiết bị chưa hỗ trợ nhập bằng giọng nói.", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Không thể khởi động nhận dạng giọng nói: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     DisposableEffect(ttsHelper, vm) {
         ttsHelper.listener = object : TtsProgressListener {
@@ -170,6 +211,23 @@ fun ChatScreen(
     LaunchedEffect(vm) {
         vm.stopSpeechEvents.collect {
             ttsHelper.stop()
+        }
+    }
+
+    val fpsSettings = LocalAnimationFpsSettings.current
+    LaunchedEffect(fpsSettings) {
+        vm.setFpsSettings(fpsSettings)
+    }
+
+    val onActionClick: (AssistantActionDto) -> Unit = { actionDto ->
+        if (vm.canClickAction()) {
+            launchActionSafely(
+                context = context,
+                dto = actionDto,
+                onError = { errorMsg ->
+                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                },
+            )
         }
     }
 
@@ -270,11 +328,14 @@ fun ChatScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 items(messages, key = { it.id }) { m ->
+                                    val action = ui.activeActions[m.id]
                                     MessageBubble(
                                         text = m.text,
                                         isUser = m.role == "user",
                                         fontSizeSp = displaySettings.fontSizeSp,
                                         lineHeightSp = displaySettings.lineHeightSp,
+                                        action = action,
+                                        onActionClick = onActionClick,
                                     )
                                 }
                                 if (pending != null) {
@@ -332,6 +393,16 @@ fun ChatScreen(
                                         disabledContainerColor = Color(0xFFF1F1F4),
                                     ),
                                 )
+                                IconButton(
+                                    onClick = onLaunchVoiceInput,
+                                    enabled = canVoiceInput,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mic),
+                                        contentDescription = "Nhập bằng giọng nói",
+                                        tint = if (canVoiceInput) MaterialTheme.colorScheme.primary else Color.Gray.copy(alpha = 0.5f),
+                                    )
+                                }
                                 FilledIconButton(onClick = vm::send, enabled = canSend, shape = CircleShape) {
                                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Gửi")
                                 }
@@ -351,10 +422,12 @@ private fun MessageBubble(
     dimmed: Boolean = false,
     fontSizeSp: Int = ChatDisplaySettings.DEFAULT_FONT_SIZE_SP,
     lineHeightSp: Int = fontSizeSp + ChatDisplaySettings.LINE_HEIGHT_OFFSET_SP,
+    action: AssistantActionDto? = null,
+    onActionClick: ((AssistantActionDto) -> Unit)? = null,
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
     ) {
         Surface(
             shape = if (isUser) UserShape else BotShape,
@@ -368,6 +441,52 @@ private fun MessageBubble(
                 fontSize = fontSizeSp.sp,
                 lineHeight = lineHeightSp.sp,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+
+        if (!isUser && action != null && onActionClick != null) {
+            Spacer(Modifier.height(6.dp))
+            ActionCardButton(
+                action = action,
+                onClick = { onActionClick(action) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionCardButton(
+    action: AssistantActionDto,
+    onClick: () -> Unit,
+) {
+    val iconEmoji = when (action.type) {
+        AssistantActionTypes.SET_TIMER -> "⏰"
+        AssistantActionTypes.CREATE_CALENDAR_EVENT -> "📅"
+        AssistantActionTypes.MAP_SEARCH -> "📍"
+        else -> "✨"
+    }
+    val label = actionButtonLabel(action)
+
+    ElevatedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.elevatedButtonColors(
+            containerColor = Color.White,
+            contentColor = MaterialTheme.colorScheme.primary,
+        ),
+        elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(iconEmoji, fontSize = 16.sp)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

@@ -44,3 +44,7 @@ temp/
 
 # Local Chroma vector store for RAG
 backend/chroma_data/
+
+# Local source and review archives
+/android/android_stage3_updated_sources.zip
+/android-stage10-review.zip

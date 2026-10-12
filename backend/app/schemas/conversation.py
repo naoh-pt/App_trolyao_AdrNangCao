@@ -1,7 +1,7 @@
 """Pydantic schemas for Conversation and Message resources."""
 
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_serializer
 
 from app.schemas.knowledge import SourceResponse
 
@@ -26,6 +26,18 @@ class ConversationListResponse(BaseModel):
     items: List[ConversationResponse]
 
 
+class AssistantActionResponse(BaseModel):
+    """Structured allowlisted assistant action proposed to the client."""
+    type: str
+    label: str
+    message: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    title: Optional[str] = None
+    start_at: Optional[str] = None
+    end_at: Optional[str] = None
+    query: Optional[str] = None
+
+
 class MessageResponse(BaseModel):
     """Message representation in API responses."""
     model_config = ConfigDict(from_attributes=True)
@@ -34,7 +46,15 @@ class MessageResponse(BaseModel):
     role: str
     text: str
     emotion: Optional[str] = None
+    action: Optional[AssistantActionResponse] = None
     created_at: str
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        d = handler(self)
+        if d.get("action") is None:
+            d.pop("action", None)
+        return d
 
 
 class MessageListResponse(BaseModel):
@@ -53,6 +73,14 @@ class SendMessageResponse(BaseModel):
     user_message: MessageResponse
     assistant_message: MessageResponse
     sources: List[SourceResponse] = Field(default_factory=list)
+    action: Optional[AssistantActionResponse] = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        d = handler(self)
+        if d.get("action") is None:
+            d.pop("action", None)
+        return d
 
 
 class ErrorDetail(BaseModel):

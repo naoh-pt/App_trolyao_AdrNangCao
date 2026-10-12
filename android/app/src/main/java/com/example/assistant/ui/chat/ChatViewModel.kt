@@ -1,5 +1,8 @@
 package com.example.assistant.ui.chat
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -7,9 +10,12 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.assistant.assistantApp
 import com.example.assistant.data.local.MessageEntity
 import com.example.assistant.data.local.SettingsStore
+import com.example.assistant.data.remote.AssistantActionDto
 import com.example.assistant.data.repo.ChatRepository
+import com.example.assistant.domain.AnimationFpsSettings
 import com.example.assistant.domain.CharacterState
 import com.example.assistant.domain.Emotion
+import com.example.assistant.ui.character.animationSpecFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,8 +35,24 @@ import java.util.UUID
 
 private const val MAX_LEN = 2000
 
-/** Duration (in milliseconds) to briefly display the backend response emotion after speech completes, or when TTS is disabled. */
-const val EMOTION_DISPLAY_DURATION_MS = 1000L
+/** Default safety margin added to full animation sequence duration (in milliseconds). */
+const val DEFAULT_EMOTION_WATCHDOG_SAFETY_MARGIN_MS = 400L
+
+/**
+ * Pure calculation of watchdog recovery timeout for a character emotion.
+ * Derives timeout from total animation duration (frames * frameDurationMs) plus safety margin (300-500ms).
+ * Returns 0L for NEUTRAL as neutral transitions directly to IDLE without animation watchdog.
+ */
+fun calculateEmotionWatchdogDurationMs(
+    emotion: Emotion,
+    fpsSettings: AnimationFpsSettings = AnimationFpsSettings.DEFAULT,
+    safetyMarginMs: Long = DEFAULT_EMOTION_WATCHDOG_SAFETY_MARGIN_MS,
+): Long {
+    if (emotion == Emotion.NEUTRAL) return 0L
+    val baseSpec = animationSpecFor(CharacterState.TALKING, emotion)
+    val effectiveSpec = fpsSettings.applyOverride(baseSpec)
+    return effectiveSpec.totalDurationMs + safetyMarginMs
+}
 
 data class SpeechEvent(
     val utteranceId: String,
@@ -47,6 +69,8 @@ data class ChatUiState(
     val error: String? = null,
     /** false khi lần đồng bộ gần nhất với server thất bại -> chỉ xem cache, không gửi/tạo. */
     val online: Boolean = true,
+    /** Map of assistant message ID to proposed assistant action. */
+    val activeActions: Map<String, AssistantActionDto> = emptyMap(),
 )
 
 /**
@@ -69,6 +93,36 @@ fun ChatUiState.reduceAnimationFinished(): ChatUiState =
     } else {
         this
     }
+
+/**
+ * Pure parsing of speech recognition results.
+ * Returns the first trimmed, non-blank match if [resultCode] is [Activity.RESULT_OK], otherwise null.
+ */
+fun extractSpeechRecognitionText(resultCode: Int, results: List<String>?): String? {
+    if (resultCode != Activity.RESULT_OK) return null
+    val best = results?.firstOrNull()?.trim()
+    return if (!best.isNullOrBlank()) best else null
+}
+
+/**
+ * Pure state reducer determining updated text input from speech recognition.
+ * If [recognizedText] is non-blank, returns it trimmed; otherwise preserves [currentText].
+ */
+fun reduceVoiceInput(currentText: String, recognizedText: String?): String =
+    if (!recognizedText.isNullOrBlank()) {
+        recognizedText.trim()
+    } else {
+        currentText
+    }
+
+/**
+ * Extracts recognized speech text from Android speech recognizer activity result.
+ */
+fun extractSpeechRecognitionResult(resultCode: Int, data: Intent?): String? {
+    if (resultCode != Activity.RESULT_OK || data == null) return null
+    val results = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+    return extractSpeechRecognitionText(resultCode, results)
+}
 
 /**
  * Centralized coordinator for character animation state synchronized with TTS lifecycle.
@@ -121,8 +175,13 @@ class SpeechAnimationCoordinator(
             // Character remains in THINKING until onSpeechStarted
         } else {
             activeUtteranceId = null
-            characterState = CharacterState.TALKING
-            emotion = responseEmotion
+            if (responseEmotion != Emotion.NEUTRAL) {
+                characterState = CharacterState.TALKING
+                emotion = responseEmotion
+            } else {
+                characterState = CharacterState.IDLE
+                emotion = Emotion.NEUTRAL
+            }
         }
     }
 
@@ -200,6 +259,26 @@ class ChatViewModel(
     var isTtsEnabled: Boolean = SettingsStore.DEFAULT_TTS_ENABLED
         private set
 
+    var fpsSettings: AnimationFpsSettings = AnimationFpsSettings.DEFAULT
+        private set
+
+    fun setFpsSettings(settings: AnimationFpsSettings) {
+        fpsSettings = settings
+    }
+
+    private var lastActionClickTimeMs = 0L
+
+    /** Guard against rapid duplicate taps on assistant action buttons. */
+    fun canClickAction(): Boolean {
+        val now = System.currentTimeMillis()
+        return if (now - lastActionClickTimeMs > 1000L) {
+            lastActionClickTimeMs = now
+            true
+        } else {
+            false
+        }
+    }
+
     private val conversationId = MutableStateFlow(initialConversationId)
     private val _ui = MutableStateFlow(ChatUiState())
     val ui: StateFlow<ChatUiState> = _ui.asStateFlow()
@@ -261,6 +340,15 @@ class ChatViewModel(
         _ui.update { s -> s.copy(input = text.take(MAX_LEN)) }
     }
 
+    /**
+     * Updates input text with recognized voice input result without sending automatically.
+     * Preserves existing input if [recognizedText] is null or blank.
+     */
+    fun onVoiceInputResult(recognizedText: String?) {
+        val updated = reduceVoiceInput(_ui.value.input, recognizedText)
+        onInputChange(updated)
+    }
+
     fun send() {
         val s = _ui.value
         if (s.sending || !s.online) return
@@ -298,27 +386,35 @@ class ChatViewModel(
             repo.sendMessage(id, rid, text).fold(
                 onSuccess = { reply ->
                     requestId = null
-                    val emotion = Emotion.from(reply.emotion)
+                    val botMsg = reply.message
+                    val botAction = reply.action
+                    val emotion = Emotion.from(botMsg.emotion)
                     val utteranceId = UUID.randomUUID().toString()
                     talkJob?.cancel()
                     talkJob = null
 
-                    val willSpeak = isTtsEnabled && reply.text.isNotBlank()
+                    val willSpeak = isTtsEnabled && botMsg.text.isNotBlank()
                     coordinator.onReplyReceived(utteranceId, emotion, ttsEnabled = willSpeak)
                     _ui.update {
+                        val updatedActions = if (botAction != null) {
+                            it.activeActions + (botMsg.id to botAction)
+                        } else {
+                            it.activeActions
+                        }
                         it.copy(
                             pending = null,
                             sending = false,
                             error = null,
                             characterState = coordinator.characterState,
                             emotion = coordinator.emotion,
+                            activeActions = updatedActions,
                         )
                     }
 
                     if (willSpeak) {
-                        _speechEvents.emit(SpeechEvent(utteranceId, reply.text))
+                        _speechEvents.emit(SpeechEvent(utteranceId, botMsg.text))
                     } else {
-                        scheduleEmotionTimeoutIfNeeded()
+                        scheduleEmotionWatchdog()
                     }
                 },
                 onFailure = { fail(it) },
@@ -326,12 +422,15 @@ class ChatViewModel(
         }
     }
 
-    private fun scheduleEmotionTimeoutIfNeeded() {
+    private fun scheduleEmotionWatchdog() {
         talkJob?.cancel()
         talkJob = null
-        if (coordinator.characterState == CharacterState.TALKING) {
+        val currentEmotion = coordinator.emotion
+        if (coordinator.characterState == CharacterState.TALKING && currentEmotion != Emotion.NEUTRAL) {
+            val watchdogMs = calculateEmotionWatchdogDurationMs(currentEmotion, fpsSettings)
             talkJob = viewModelScope.launch {
-                delay(EMOTION_DISPLAY_DURATION_MS)
+                delay(watchdogMs)
+                // Watchdog recovery only triggers if normal animation completion callback was missed
                 coordinator.onEmotionDisplayFinished()
                 _ui.update { current ->
                     if (current.characterState == CharacterState.TALKING) {
@@ -360,7 +459,7 @@ class ChatViewModel(
             talkJob?.cancel()
             talkJob = null
             _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
-            scheduleEmotionTimeoutIfNeeded()
+            scheduleEmotionWatchdog()
         }
     }
 
@@ -369,7 +468,7 @@ class ChatViewModel(
             talkJob?.cancel()
             talkJob = null
             _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
-            scheduleEmotionTimeoutIfNeeded()
+            scheduleEmotionWatchdog()
         }
     }
 

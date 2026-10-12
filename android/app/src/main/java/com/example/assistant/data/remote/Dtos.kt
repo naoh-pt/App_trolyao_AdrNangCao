@@ -11,12 +11,24 @@ data class ConversationDto(
     @SerializedName("updated_at") val updatedAt: String,
 )
 
+data class AssistantActionDto(
+    val type: String,
+    val label: String = "",
+    val message: String? = null,
+    @SerializedName("duration_seconds") val durationSeconds: Int? = null,
+    val title: String? = null,
+    @SerializedName("start_at") val startAt: String? = null,
+    @SerializedName("end_at") val endAt: String? = null,
+    val query: String? = null,
+)
+
 data class MessageDto(
     val id: String,
     val role: String,
     val text: String,
     val emotion: String?,
     @SerializedName("created_at") val createdAt: String,
+    val action: AssistantActionDto? = null,
 )
 
 data class SendMessageRequest(
@@ -27,6 +39,7 @@ data class SendMessageRequest(
 data class SendMessageResponse(
     @SerializedName("user_message") val userMessage: MessageDto,
     @SerializedName("assistant_message") val assistantMessage: MessageDto,
+    val action: AssistantActionDto? = null,
 )
 
 data class HealthResponse(val status: String?)

@@ -21,6 +21,11 @@ import retrofit2.Response
 import java.io.IOException
 import java.time.Instant
 
+data class AssistantReply(
+    val message: MessageEntity,
+    val action: com.example.assistant.data.remote.AssistantActionDto? = null,
+)
+
 /**
  * Nguồn dữ liệu chính là backend; Room chỉ là cache để xem khi offline.
  * Mọi hàm public trả về Result, lỗi là ApiException có message tiếng Việt để hiện thẳng lên UI.
@@ -83,14 +88,16 @@ class ChatRepository(
         }
     }
 
-    /** Dùng lại cùng requestId khi thử lại để backend không tạo tin nhắn kép. Trả về tin nhắn của trợ lý. */
-    suspend fun sendMessage(conversationId: String, requestId: String, text: String): Result<MessageEntity> = safe {
+
+    /** Dùng lại cùng requestId khi thử lại để backend không tạo tin nhắn kép. Trả về tin nhắn của trợ lý và hành động đính kèm (nếu có). */
+    suspend fun sendMessage(conversationId: String, requestId: String, text: String): Result<AssistantReply> = safe {
         val resp = call { api, cid -> api.sendMessage(conversationId, cid, SendMessageRequest(requestId, text)) }
         val user = resp.userMessage.toEntity(conversationId)
         val bot = resp.assistantMessage.toEntity(conversationId)
         msgDao.upsertAll(listOf(user, bot))
         refreshConversations() // cập nhật tiêu đề / updated_at, lỗi cũng bỏ qua
-        bot
+        val action = resp.action ?: resp.assistantMessage.action
+        AssistantReply(message = bot, action = action)
     }
 
     // ---------- nội bộ ----------
