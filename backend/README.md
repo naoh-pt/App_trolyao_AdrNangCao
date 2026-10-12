@@ -17,7 +17,7 @@ Milestone 3 tích hợp tính năng gửi tin nhắn và nhận phản hồi t�
 Mở Windows PowerShell và chuyển vào thư mục `backend`:
 
 ```powershell
-cd d:\nam5\semester_1\advance_android\troLyAo_ani\backend
+cd backend
 ```
 
 ---
@@ -56,7 +56,7 @@ Bạn có thể:
 
 ## 5. Chạy bộ kiểm thử tự động (Automated Tests)
 
-Chạy toàn bộ 39 test cases (bao gồm các ca hồi quy sau code review) với cơ sở dữ liệu tạm thời (được cô lập hoàn toàn, không ảnh hưởng đến database phát triển):
+Chạy toàn bộ bộ kiểm thử với cơ sở dữ liệu tạm thời (được cô lập hoàn toàn, không ảnh hưởng đến database phát triển):
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v
