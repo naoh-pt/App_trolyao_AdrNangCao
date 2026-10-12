@@ -66,6 +66,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.assistant.R
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ElevatedButton
+import androidx.compose.ui.text.font.FontWeight
+import com.example.assistant.data.remote.AssistantActionDto
+import com.example.assistant.domain.LocalAnimationFpsSettings
 import com.example.assistant.domain.ChatDisplaySettings
 import com.example.assistant.domain.LocalChatDisplaySettings
 import com.example.assistant.domain.LocalSpeechSettings
@@ -208,6 +214,23 @@ fun ChatScreen(
         }
     }
 
+    val fpsSettings = LocalAnimationFpsSettings.current
+    LaunchedEffect(fpsSettings) {
+        vm.setFpsSettings(fpsSettings)
+    }
+
+    val onActionClick: (AssistantActionDto) -> Unit = { actionDto ->
+        if (vm.canClickAction()) {
+            launchActionSafely(
+                context = context,
+                dto = actionDto,
+                onError = { errorMsg ->
+                    Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                },
+            )
+        }
+    }
+
     val itemCount = messages.size +
         (if (pending != null) 1 else 0) +
         (if (ui.sending) 1 else 0) +
@@ -305,11 +328,14 @@ fun ChatScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 items(messages, key = { it.id }) { m ->
+                                    val action = ui.activeActions[m.id]
                                     MessageBubble(
                                         text = m.text,
                                         isUser = m.role == "user",
                                         fontSizeSp = displaySettings.fontSizeSp,
                                         lineHeightSp = displaySettings.lineHeightSp,
+                                        action = action,
+                                        onActionClick = onActionClick,
                                     )
                                 }
                                 if (pending != null) {
@@ -396,10 +422,12 @@ private fun MessageBubble(
     dimmed: Boolean = false,
     fontSizeSp: Int = ChatDisplaySettings.DEFAULT_FONT_SIZE_SP,
     lineHeightSp: Int = fontSizeSp + ChatDisplaySettings.LINE_HEIGHT_OFFSET_SP,
+    action: AssistantActionDto? = null,
+    onActionClick: ((AssistantActionDto) -> Unit)? = null,
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
     ) {
         Surface(
             shape = if (isUser) UserShape else BotShape,
@@ -413,6 +441,52 @@ private fun MessageBubble(
                 fontSize = fontSizeSp.sp,
                 lineHeight = lineHeightSp.sp,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+
+        if (!isUser && action != null && onActionClick != null) {
+            Spacer(Modifier.height(6.dp))
+            ActionCardButton(
+                action = action,
+                onClick = { onActionClick(action) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionCardButton(
+    action: AssistantActionDto,
+    onClick: () -> Unit,
+) {
+    val iconEmoji = when (action.type) {
+        AssistantActionTypes.SET_TIMER -> "⏰"
+        AssistantActionTypes.CREATE_CALENDAR_EVENT -> "📅"
+        AssistantActionTypes.MAP_SEARCH -> "📍"
+        else -> "✨"
+    }
+    val label = actionButtonLabel(action)
+
+    ElevatedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.elevatedButtonColors(
+            containerColor = Color.White,
+            contentColor = MaterialTheme.colorScheme.primary,
+        ),
+        elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 2.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(iconEmoji, fontSize = 16.sp)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
     }

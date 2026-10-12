@@ -181,10 +181,7 @@ class SpeechAnimationSyncTest {
     fun testTtsDisabledNeutralReply() {
         coordinator.onUserSendMessage()
         coordinator.onReplyReceived("utt-disabled-neutral", Emotion.NEUTRAL, ttsEnabled = false)
-        assertEquals(CharacterState.TALKING, coordinator.characterState)
-        assertEquals(Emotion.NEUTRAL, coordinator.emotion)
-
-        coordinator.onEmotionDisplayFinished()
+        // Neutral reply with TTS disabled returns directly to IDLE without emotional intermediate
         assertEquals(CharacterState.IDLE, coordinator.characterState)
         assertEquals(Emotion.NEUTRAL, coordinator.emotion)
     }
