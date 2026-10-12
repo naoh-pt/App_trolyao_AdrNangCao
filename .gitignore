@@ -3,6 +3,8 @@
 venv/
 ENV/
 env/
+my_venv/
+
 # SQLite WAL sidecar files
 *.db-*
 *.sqlite3-*
@@ -39,3 +41,10 @@ Thumbs.db
 *.log
 tmp/
 temp/
+
+# Local Chroma vector store for RAG
+backend/chroma_data/
+
+# Local source and review archives
+/android/android_stage3_updated_sources.zip
+/android-stage10-review.zip

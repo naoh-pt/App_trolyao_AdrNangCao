@@ -1,9 +1,15 @@
 """Pytest configuration and fixtures for testing with an isolated temporary SQLite database."""
 
 import sqlite3
+import os
 from typing import Generator
 import pytest
 from fastapi.testclient import TestClient
+
+# Tests must always use deterministic Mock AI and never the developer's key.
+os.environ["USE_REAL_AI"] = "false"
+os.environ["RAG_ENABLED"] = "false"
+os.environ["GEMINI_API_KEY"] = ""
 
 import app.config as app_config
 from app.db.connection import get_connection, get_db, init_db

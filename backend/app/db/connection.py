@@ -65,6 +65,27 @@ def init_db(db_path: Optional[str] = None) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_idempotency_lookup
                 ON idempotency_records(client_id, conversation_id, request_id);
+
+            CREATE TABLE IF NOT EXISTS knowledge_documents (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                sha256 TEXT NOT NULL UNIQUE,
+                page_count INTEGER NOT NULL,
+                chunk_count INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS message_sources (
+                assistant_message_id TEXT NOT NULL,
+                document_id TEXT NOT NULL,
+                chunk_id TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                page_number INTEGER NOT NULL,
+                score REAL NOT NULL,
+                PRIMARY KEY (assistant_message_id, chunk_id),
+                FOREIGN KEY (assistant_message_id) REFERENCES messages(id) ON DELETE CASCADE,
+                FOREIGN KEY (document_id) REFERENCES knowledge_documents(id) ON DELETE CASCADE
+            );
             """)
     finally:
         conn.close()
