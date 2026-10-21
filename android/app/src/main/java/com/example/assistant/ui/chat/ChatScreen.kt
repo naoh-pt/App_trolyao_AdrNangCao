@@ -32,6 +32,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material3.ModalBottomSheet
+import com.example.assistant.ui.companion.MoodChoice
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -307,6 +310,13 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = {
+                            focusManager.clearFocus(force = true)
+                            keyboard?.hide()
+                            vm.openManualMood()
+                        }, enabled = ui.online && !ui.sending && ui.pending == null && !ui.companion.selectionBusy) {
+                            Icon(Icons.Filled.Face, contentDescription = "Cập nhật tâm trạng")
+                        }
                         IconButton(onClick = vm::newChat, enabled = !ui.sending) {
                             Icon(Icons.Filled.Add, contentDescription = "Chat mới")
                         }
@@ -487,6 +497,21 @@ fun ChatScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+    if (ui.companion.manualMoodVisible) {
+        ModalBottomSheet(onDismissRequest = vm::dismissManualMood) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text("Hôm nay bạn cảm thấy thế nào?", style = MaterialTheme.typography.titleMedium,
+                    fontSize = displaySettings.fontSizeSp.sp)
+                MoodChoice.entries.forEach { mood ->
+                    TextButton(onClick = { vm.chooseMood(mood) }, modifier = Modifier.fillMaxWidth(),
+                        enabled = ui.online && !ui.sending && ui.pending == null && !ui.companion.selectionBusy) {
+                        Text(mood.label, fontSize = displaySettings.fontSizeSp.sp)
+                    }
+                }
+                TextButton(onClick = vm::dismissManualMood, modifier = Modifier.fillMaxWidth()) { Text("Để sau") }
             }
         }
     }

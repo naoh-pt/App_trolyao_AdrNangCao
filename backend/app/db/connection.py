@@ -66,6 +66,24 @@ def init_db(db_path: Optional[str] = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_idempotency_lookup
                 ON idempotency_records(client_id, conversation_id, request_id);
 
+            CREATE TABLE IF NOT EXISTS pending_actions (
+                client_id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                intent TEXT NOT NULL CHECK(intent = 'create_calendar_event'),
+                slots_json TEXT NOT NULL CHECK(length(slots_json) <= 2000),
+                missing_slots_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                PRIMARY KEY(client_id, conversation_id),
+                FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS message_action_snapshots (
+                assistant_message_id TEXT PRIMARY KEY,
+                action_json TEXT NOT NULL,
+                FOREIGN KEY(assistant_message_id) REFERENCES messages(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS personal_memories (
                 id TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,

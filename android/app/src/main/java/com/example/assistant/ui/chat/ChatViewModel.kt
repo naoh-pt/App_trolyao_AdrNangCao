@@ -400,6 +400,8 @@ class ChatViewModel(
     }
 
     fun dismissMood() { _ui.update { it.copy(companion = it.companion.copy(moodVisible = false)) } }
+    fun openManualMood() { _ui.update { it.openManualMood() } }
+    fun dismissManualMood() { _ui.update { it.dismissManualMood() } }
     fun chooseMood(choice: MoodChoice) = sendCompanion(choice, null)
     fun chooseSupport(choice: SupportChoice) = sendCompanion(null, choice)
 
@@ -410,7 +412,7 @@ class ChatViewModel(
         _ui.update { it.copy(companion = selection.first) }
         val id = conversationId.value
         viewModelScope.launch {
-            val ownerMatches = mood == null || repo.ownerId() == current.companion.moodOwner
+            val ownerMatches = mood == null || current.companion.manualMoodVisible || repo.ownerId() == current.companion.moodOwner
             if (conversationId.value != id || !ownerMatches) {
                 _ui.update { it.copy(companion = it.companion.copy(selectionBusy = false)) }
                 return@launch

@@ -15,6 +15,7 @@ from app.exceptions import (
 )
 from app.services.personality import ANNA_SYSTEM_PROMPT, normalize_emotion
 from app.services.memory_context import provider_system_prompt
+from app.services.intent_proposal import GeneratedReply
 from app.services.providers.base import BaseProvider
 
 
@@ -100,7 +101,7 @@ class GeminiProvider(BaseProvider):
                 raise LLMUnavailableException("LLM trả về câu trả lời rỗng hoặc không hợp lệ.")
 
             emotion = normalize_emotion(result_json.get("emotion"))
-            return reply.strip(), emotion
+            return GeneratedReply(reply.strip(), emotion, result_json.get("intent_proposal"))
 
         except json.JSONDecodeError:
             logging.error("[Gemini Provider Error] Malformed JSON response.")

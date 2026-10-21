@@ -22,14 +22,15 @@ enum class SupportChoice(val label: String, val message: String) {
 
 data class CompanionChatState(
     val moodVisible: Boolean = false,
+    val manualMoodVisible: Boolean = false,
     val moodOwner: String? = null,
     val supportMessageId: String? = null,
     val selectionBusy: Boolean = false,
     val entryEngaged: Boolean = false,
 ) {
-    fun userTurn() = copy(moodVisible = false, supportMessageId = null, entryEngaged = true)
+    fun userTurn() = copy(moodVisible = false, manualMoodVisible = false, supportMessageId = null, entryEngaged = true)
     fun takeMood(choice: MoodChoice): Pair<CompanionChatState, String>? =
-        if (!moodVisible || selectionBusy) null else copy(moodVisible = false, supportMessageId = null, selectionBusy = true) to choice.message
+        if ((!moodVisible && !manualMoodVisible) || selectionBusy) null else copy(moodVisible = false, manualMoodVisible = false, supportMessageId = null, selectionBusy = true) to choice.message
     fun takeSupport(choice: SupportChoice): Pair<CompanionChatState, String>? =
         if (supportMessageId == null || selectionBusy) null else copy(supportMessageId = null, moodVisible = false, selectionBusy = true) to choice.message
 }
@@ -41,6 +42,13 @@ fun ChatUiState.selectCompanion(mood: MoodChoice?, support: SupportChoice?): Pai
     if (!online || sending || pending != null || (mood == null) == (support == null)) return null
     return if (mood != null) companion.takeMood(mood) else companion.takeSupport(support!!)
 }
+
+fun ChatUiState.openManualMood(): ChatUiState =
+    if (!online || sending || pending != null || companion.selectionBusy) this
+    else copy(companion = companion.copy(manualMoodVisible = true))
+
+fun ChatUiState.dismissManualMood(): ChatUiState =
+    copy(companion = companion.copy(manualMoodVisible = false))
 
 fun emotionalSupportCue(raw: String): Boolean {
     val text = Normalizer.normalize(raw, Normalizer.Form.NFC).lowercase().replace(Regex("[\\s\\p{Z}]+"), " ").trim()

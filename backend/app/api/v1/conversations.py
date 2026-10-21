@@ -3,6 +3,7 @@
 import sqlite3
 import uuid
 import logging
+import json
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Response, status
@@ -42,6 +43,9 @@ from app.services.companion_service import load_preferences, using_companion
 from app.services.assistant_action_service import recognize_action
 from app.services.personality import ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION
 from app.utils.time import utc_now_iso
+from app.services.intent_normalization import normalize_intent
+from app.services.intent_proposal import proposal_command
+from app.services.pending_calendar import plan_calendar, apply_calendar
 
 router = APIRouter(tags=["Conversations"])
 VALID_EMOTIONS = {"neutral", "happy", "sad", "surprised"}
@@ -246,9 +250,14 @@ def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id
 
     action_dto = None
     # Relative calendar dates must retain the original request's clock on replay.
-    action_match = None if parse_memory_command(message) else recognize_action(message, now=datetime.fromisoformat(user["created_at"].replace("Z", "+00:00")))
-    if action_match is not None and action_match.action is not None:
-        action_dto = AssistantActionResponse(**action_match.action.to_dict())
+    snapshot = db.execute("SELECT action_json FROM message_action_snapshots WHERE assistant_message_id=?", (assistant["id"],)).fetchone()
+    if snapshot is not None:
+        data = json.loads(snapshot["action_json"])
+        action_dto = AssistantActionResponse(**data) if data is not None else None
+    else:
+        action_match = None if parse_memory_command(message) else recognize_action(message, now=datetime.fromisoformat(user["created_at"].replace("Z", "+00:00")))
+        if action_match is not None and action_match.action is not None:
+            action_dto = AssistantActionResponse(**action_match.action.to_dict())
 
     asst_dict = dict(assistant)
     asst_dict["action"] = action_dto
@@ -291,7 +300,7 @@ def send_message(
         raise InvalidMessageException("Message text cannot exceed 2000 characters")
 
     # A retry waits for the owner, then checks the committed result before calling AI.
-    with own_request(req_id):
+    with own_request(req_id), own_request("conversation:" + conv_id):
         conv_row = db.execute(
             "SELECT id FROM conversations WHERE id = ? AND client_id = ?",
             (conv_id, client_id),
@@ -305,8 +314,17 @@ def send_message(
 
         # Check deterministic assistant actions first (timer, calendar, map)
         action_now = datetime.now(timezone.utc)
-        memory_command = parse_memory_command(normalized_msg)
-        action_match = None if memory_command else recognize_action(normalized_msg, now=action_now)
+        intent_text = normalize_intent(normalized_msg)
+        calendar_plan = plan_calendar(db, client_id, conv_id, intent_text, action_now)
+        memory_command = parse_memory_command(intent_text) if calendar_plan.result is None else None
+        action_match = calendar_plan.result or (None if memory_command else recognize_action(intent_text, now=action_now))
+        # The anchored quick-reply and action grammars do not overlap. Preserve
+        # the existing action bypass (including no quick-reply lookup) when matched.
+        quick_reply = None
+        if action_match is None and memory_command is None:
+            quick_reply = get_quick_reply(normalized_msg)
+            if quick_reply is None and intent_text != normalized_msg:
+                quick_reply = get_quick_reply(intent_text)
         proposed_action = None
         weather_intent = None
         if memory_command is not None:
@@ -318,11 +336,10 @@ def send_message(
             retrieved = []
         else:
             # Check deterministic quick replies second (skips context, RAG, and AI)
-            quick_reply = get_quick_reply(normalized_msg)
             if quick_reply is not None:
                 reply_text, reply_emotion = quick_reply
                 retrieved = []
-            elif (weather_intent := parse_weather_intent(normalized_msg)) is not None:
+            elif (weather_intent := parse_weather_intent(intent_text)) is not None:
                 # Execute after the user INSERT, inside the existing atomic write below.
                 retrieved = []
             else:
@@ -367,6 +384,21 @@ def send_message(
                 if not isinstance(result, (tuple, list)) or len(result) != 2:
                     raise InvalidAIReplyException()
                 reply_text, reply_emotion = result
+                command = proposal_command(getattr(result, "intent_proposal", None), intent_text)
+                if command:
+                    candidate = recognize_action(command, now=action_now)
+                    weather_candidate = parse_weather_intent(command)
+                    local_candidate = get_quick_reply(command)
+                    if candidate is not None and candidate.action is not None:
+                        action_match = candidate
+                        proposed_action = AssistantActionResponse(**candidate.action.to_dict())
+                        reply_text, reply_emotion = candidate.reply, candidate.emotion
+                        retrieved = []
+                    elif weather_candidate is not None:
+                        intent_text, weather_intent, retrieved = command, weather_candidate, []
+                    elif local_candidate is not None:
+                        reply_text, reply_emotion = local_candidate
+                        retrieved = []
         if weather_intent is None and memory_command is None:
             reply_text, reply_emotion = _validated_reply(reply_text, reply_emotion)
 
@@ -384,6 +416,17 @@ def send_message(
                     (conv_id, client_id),
                 ).fetchone() is None:
                     raise ConversationNotFoundException()
+                if calendar_plan.result is not None:
+                    # Re-read under the SQLite write lock as well as the process-local
+                    # conversation lock; another worker cannot consume stale slots twice.
+                    calendar_plan = plan_calendar(db, client_id, conv_id, normalize_intent(normalized_msg), action_now)
+                    fresh = calendar_plan.result
+                    if fresh is None:
+                        reply_text, reply_emotion = "Bạn hãy tạo lại lịch với tiêu đề, ngày và giờ nhé.", "neutral"
+                        proposed_action = None
+                    else:
+                        reply_text, reply_emotion = fresh.reply, fresh.emotion
+                        proposed_action = AssistantActionResponse(**fresh.action.to_dict()) if fresh.action else None
                 db.execute(
                     """INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
                        VALUES (?, ?, ?, ?, ?, ?)""",
@@ -391,14 +434,17 @@ def send_message(
                 )
                 if weather_intent is not None:
                     # Same transaction commits both messages and replay record, or none.
-                    reply_text, reply_emotion = _validated_reply(*get_weather_reply(normalized_msg, request_id=req_id))
+                    reply_text, reply_emotion = _validated_reply(*get_weather_reply(intent_text, request_id=req_id))
                 if memory_command is not None:
                     reply_text, reply_emotion = _validated_reply(*memory_reply(db, client_id, memory_command))
+                apply_calendar(db, client_id, conv_id, calendar_plan, action_now)
                 db.execute(
                     """INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
                        VALUES (?, ?, ?, ?, ?, ?)""",
                     (asst_msg_id, conv_id, "assistant", reply_text, reply_emotion, now_ts),
                 )
+                db.execute("INSERT INTO message_action_snapshots (assistant_message_id,action_json) VALUES (?,?)",
+                           (asst_msg_id, json.dumps(proposed_action.model_dump() if proposed_action else None, ensure_ascii=False)))
                 db.execute(
                     """INSERT INTO idempotency_records
                        (request_id, client_id, conversation_id, normalized_message,
