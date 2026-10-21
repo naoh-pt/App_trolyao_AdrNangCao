@@ -51,9 +51,34 @@ class DemoScenarioControllerTest {
         val state = start().navigate(DemoCommand.Next)
         repeat(10) { assertEquals(state.demo.progress, state.copy(demo = state.demo.copy()).demo.progress) }
     }
-    @Test fun disabledWeatherCannotBePicked() {
+    @Test fun weatherSelectionPreservesExistingDraftUntilConfirmed() {
         val state = start()
-        assertEquals(state, state.reduceDemo(DemoCommand.Pick("weather_now")))
+        val pending = state.reduceDemo(DemoCommand.Pick("weather_now"))
+        assertEquals(state.input, pending.input)
+        assertEquals(state.demo.progress, pending.demo.progress)
+        val accepted = pending.reduceDemo(DemoCommand.ConfirmReplacement)
+        assertEquals("Thời tiết Hà Nội hiện tại thế nào?", accepted.input)
+        assertFalse(accepted.sending)
+        assertEquals(state.characterState, accepted.characterState)
+    }
+    @Test fun weatherFillsExactPromptsWithoutSendingOrPlayback() {
+        val prompts = listOf("Thời tiết Hà Nội hiện tại thế nào?", "Ngày mai Hà Nội có mưa không?",
+            "Nhiệt độ ở Bắc Ninh hôm nay bao nhiêu?", "Hôm nay mình có nên mang áo mưa ở Hà Nội không?")
+        DemoQuestionCatalog.questions.filter { it.category == DemoCategory.Weather }.zip(prompts).forEach { (question, prompt) ->
+            val initial = ChatUiState()
+            val selected = initial.reduceDemo(DemoCommand.Open).reduceDemo(DemoCommand.Pick(question.id))
+            assertEquals(prompt, selected.input)
+            assertEquals(initial, selected.copy(input = "", demo = DemoState()))
+        }
+    }
+    @Test fun fullScenarioIncludesWeatherAsNinthManualStep() {
+        var state = start("full")
+        repeat(8) { state = state.navigate(DemoCommand.Next) }
+        assertEquals(8, state.demo.progress!!.index)
+        assertEquals("Thời tiết Hà Nội hiện tại thế nào?", state.input)
+        assertEquals(state, state.reduceDemo(DemoCommand.Next))
+        assertTrue(state.reduceDemo(DemoCommand.Complete).demo.progress!!.completed)
+        assertFalse(state.sending)
     }
     @Test fun unknownIdsIgnored() {
         val state = start()

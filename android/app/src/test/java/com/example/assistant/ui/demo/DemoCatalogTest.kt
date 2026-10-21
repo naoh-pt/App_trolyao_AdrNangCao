@@ -18,21 +18,27 @@ class DemoCatalogTest {
     }
     @Test fun orderIsStable() {
         assertEquals(listOf("chat_greeting", "time_now", "utility_timer", "utility_map_kma"), scenarios[0].questionIds)
-        assertEquals(listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma"), scenarios[1].questionIds)
+        assertEquals(listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma", "weather_now"), scenarios[1].questionIds)
         assertEquals(listOf("chat_greeting", "time_now", "time_weekday", "utility_timer", "utility_calendar", "utility_map_lake"), scenarios[2].questionIds)
     }
-    @Test fun weatherPreparedButDisabled() {
+    @Test fun weatherEnabledWithoutAiOrRag() {
         val weather = questions.filter { it.category == DemoCategory.Weather }
         assertEquals(4, weather.size)
-        assertTrue(weather.all { !it.enabled })
-        assertFalse(DemoCategory.Weather.enabled)
+        assertTrue(weather.all { it.enabled && it.requiresBackend && it.requiresInternet && !it.requiresAi && !it.requiresRag })
+        assertTrue(DemoCategory.Weather.enabled)
     }
     @Test fun quotaFreeStillNeedsBackend() {
         val local = scenarios.single { it.id == "no_quota" }.questionIds.map { DemoQuestionCatalog.question(it)!! }
         assertTrue(local.all { !it.requiresAi && !it.requiresRag && it.requiresBackend })
+        assertTrue(local.none { it.category == DemoCategory.Weather })
         assertEquals("Không cần quota AI; backend vẫn phải chạy", scenarios.last().description)
     }
     @Test fun tuitionNeedsRag() = assertTrue(DemoQuestionCatalog.question("study_tuition")!!.requiresRag)
+    @Test fun originalCategoriesAndQuestionsRemain() {
+        assertEquals(6, DemoCategory.entries.size)
+        assertEquals(listOf(4, 4, 4, 4, 5, 4), DemoCategory.entries.map { category -> questions.count { it.category == category } })
+        assertEquals("weather_now", scenarios.single { it.id == "full" }.questionIds.last())
+    }
     @Test fun enabledEntriesHaveText() = assertTrue(questions.filter { it.enabled }.all { it.title.isNotBlank() && it.prompt.isNotBlank() })
     @Test fun unicodeAndPunctuationPreserved() {
         assertEquals("Tìm trên bản đồ Hồ Gươm.", DemoQuestionCatalog.question("utility_map_lake")!!.prompt)

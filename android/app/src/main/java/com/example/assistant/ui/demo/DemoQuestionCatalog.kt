@@ -2,7 +2,7 @@ package com.example.assistant.ui.demo
 
 enum class DemoCategory(val title: String, val enabled: Boolean = true) {
     Conversation("Trò chuyện"), Time("Thời gian"), Study("Học tập & RAG"),
-    Emotion("Cảm xúc"), Utilities("Tiện ích"), Weather("Thời tiết", false),
+    Emotion("Cảm xúc"), Utilities("Tiện ích"), Weather("Thời tiết"),
 }
 
 data class DemoQuestion(
@@ -48,17 +48,17 @@ object DemoQuestionCatalog {
         DemoQuestion("utility_weekday", "Họp thứ Hai tuần sau", "Tạo lịch họp nhóm lúc 7 giờ tối thứ 2 tuần sau", DemoCategory.Utilities),
         DemoQuestion("utility_map_kma", "Bản đồ Học viện", "Tìm trên bản đồ Học viện Kỹ thuật Mật mã", DemoCategory.Utilities, requiresInternet = true),
         DemoQuestion("utility_map_lake", "Bản đồ Hồ Gươm", "Tìm trên bản đồ Hồ Gươm.", DemoCategory.Utilities, requiresInternet = true),
-        DemoQuestion("weather_now", "Thời tiết hiện tại", "Thời tiết Hà Nội hiện tại thế nào?", DemoCategory.Weather, requiresInternet = true, enabled = false),
-        DemoQuestion("weather_rain", "Dự báo mưa", "Ngày mai Hà Nội có mưa không?", DemoCategory.Weather, requiresInternet = true, enabled = false),
-        DemoQuestion("weather_temperature", "Nhiệt độ Bắc Ninh", "Nhiệt độ ở Bắc Ninh hôm nay bao nhiêu?", DemoCategory.Weather, requiresInternet = true, enabled = false),
-        DemoQuestion("weather_raincoat", "Có cần áo mưa?", "Hôm nay mình có nên mang áo mưa không?", DemoCategory.Weather, requiresInternet = true, enabled = false),
+        DemoQuestion("weather_now", "Thời tiết hiện tại", "Thời tiết Hà Nội hiện tại thế nào?", DemoCategory.Weather, requiresInternet = true),
+        DemoQuestion("weather_rain", "Dự báo mưa", "Ngày mai Hà Nội có mưa không?", DemoCategory.Weather, requiresInternet = true),
+        DemoQuestion("weather_temperature", "Nhiệt độ Bắc Ninh", "Nhiệt độ ở Bắc Ninh hôm nay bao nhiêu?", DemoCategory.Weather, requiresInternet = true),
+        DemoQuestion("weather_raincoat", "Có cần áo mưa?", "Hôm nay mình có nên mang áo mưa ở Hà Nội không?", DemoCategory.Weather, requiresInternet = true),
     )
 
     val scenarios: List<DemoScenario> = listOf(
         DemoScenario("quick", "Demo nhanh 3 phút", "Chào hỏi, giờ hiện tại và hai tiện ích quen thuộc.",
             listOf("chat_greeting", "time_now", "utility_timer", "utility_map_kma")),
         DemoScenario("full", "Demo đầy đủ", "Trò chuyện, RAG, cảm xúc và các tiện ích. Cần nạp tài liệu RAG.",
-            listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma")),
+            listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma", "weather_now")),
         DemoScenario("no_quota", "Demo không phụ thuộc quota", "Không cần quota AI; backend vẫn phải chạy",
             listOf("chat_greeting", "time_now", "time_weekday", "utility_timer", "utility_calendar", "utility_map_lake")),
     )
