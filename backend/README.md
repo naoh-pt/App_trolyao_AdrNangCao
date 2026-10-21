@@ -289,6 +289,41 @@ Khi phát triển với chế độ tự động tải lại (reload):
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+## Trí nhớ cá nhân và lời nhắc trong ứng dụng (Stage 15)
+
+Khởi động backend như cũ. `init_db()` thêm bảng `personal_memories` và chỉ mục bằng `CREATE TABLE/INDEX IF NOT EXISTS`, giữ nguyên bảng/lịch sử trò chuyện hiện có. Không cần dependency, API key, cấu hình `.env` hay migration phá dữ liệu. Kiểm thử nâng cấp chỉ chạy với database tạm.
+
+Chỉ lưu khi người dùng ra lệnh rõ ràng:
+
+```text
+Anna hãy nhớ: mình tên là Hoàn.
+Anna hãy nhớ: mình thích học Android.
+Hãy nhớ rằng mình đang học năm cuối.
+Anna nhớ gì về mình?
+Bạn đang nhớ gì về mình?
+Anna hãy quên việc mình thích học Android.
+Hãy quên thông tin mình tên là Hoàn.
+Anna hãy nhớ: mình thi Android vào thứ Sáu tuần sau. Nhắc mình khi mở ứng dụng từ hôm nay.
+```
+
+Câu kể thông thường không tự được lưu. Mỗi thông tin tối đa 300 ký tự; tối đa 30 thông tin đang hoạt động cho mỗi `X-Client-Id`; chuẩn hóa Unicode/hoa thường để chặn trùng. Bộ lọc xác định từ chối thông tin có dấu hiệu mật khẩu, OTP, API/private key, token, số thẻ đầy đủ; đây là bảo vệ theo mẫu, không bảo đảm phát hiện mọi bí mật. Tin nhắn chat vẫn được lưu theo hợp đồng hiện tại, vì vậy không nhập bí mật vào cuộc trò chuyện.
+
+Ngày sự kiện và ngày bắt đầu nhắc dùng bộ phân tích Calendar hiện có theo UTC+07:00: hôm nay, ngày mai, ngày kia, thứ cụ thể tuần này/tuần sau/tuần tới. Ngày mơ hồ hoặc đã qua cần làm rõ. Lời nhắc chỉ phát một lần khi mở/chọn một cuộc trò chuyện đã tồn tại, không chạy nền, không polling, không thông báo Android và không tự mở Calendar. Lời nhắc xuất hiện như tin nhắn lịch sử bình thường, không ép TTS/typewriter/animation. Không có cuộc trò chuyện được chọn thì không gọi check-in hay tạo chat vì check-in.
+
+API mới dùng cùng header `X-Client-Id` và kiểu lỗi của dự án:
+
+- `GET /api/v1/memories`: `{items: [...]}` gồm thông tin đang hoạt động và đã lưu trữ, có cờ `active`; không lộ trường chuẩn hóa/client ID nội bộ.
+- `DELETE /api/v1/memories/{id}`: HTTP 204, chỉ xóa bản ghi thuộc chủ sở hữu; không xóa lịch sử chat.
+- `POST /api/v1/conversations/{id}/check-in`: HTTP 200 `{message: null}` hoặc `{message: MessageResponse}`. Một transaction ghi tin nhắn và `reminded_at`; không gọi công cụ ngoài hoặc AI. Không tạo chat tự động.
+
+Android: Cài đặt → **Trí nhớ của Anna** để xem, xóa từng mục hoặc xóa tất cả sau xác nhận (xóa từng ID trong danh sách, gồm mục đã lưu trữ). Nếu mạng lỗi giữa chừng, danh sách được tải lại và hiển thị lỗi thân thiện; thao tác này không phải bulk transaction. Sự kiện hết hạn được lưu trữ/exclude khỏi context và check-in, không bị xóa ngầm. Không tự kích hoạt lại bản ghi đã nhắc/quá hạn; muốn tạo sự kiện mới cùng nội dung thì người dùng phải xóa bản cũ rồi lưu lại rõ ràng.
+
+Khi chat thường dùng Gemini/Groq, tối đa 10 mục đang hoạt động, tối đa 1500 ký tự JSON đã escape được đưa vào khối dữ liệu người dùng không đáng tin cậy, tách khỏi RAG. Không làm theo chỉ dẫn nằm trong trí nhớ. Thông tin này có thể được gửi tới provider đang cấu hình khi người dùng gửi câu hỏi AI thông thường; các lệnh local, Weather, action và check-in không gọi AI. Không log nội dung trí nhớ. Cơ chế sở hữu vẫn là UUID client của dự án, không phải hệ thống đăng nhập mới.
+
+Nhắc lặp lại, nhắc khi ứng dụng đóng và thông báo hệ thống nằm ngoài phạm vi; dùng Calendar/timer hiện có. Vào lại cùng màn hình sau xoay máy/tái tổ hợp không tạo lần check-in logic mới; vào một navigation entry mới thì kiểm tra lại. Không có yêu cầu định kỳ hay tự thử lại nền.
+
+Kiểm thử offline: `.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_memory.py`.
+
 ## Thời tiết trực tiếp: Open-Meteo (Stage 14B)
 
 Backend dùng công cụ xác định, không dùng Gemini/Groq/RAG để lấy hoặc diễn đạt dữ liệu thời tiết. Không cần API key hay GPS. Laptop chạy backend cần Internet ra ngoài tới hai host HTTPS cố định: `geocoding-api.open-meteo.com` và `api.open-meteo.com`. Không có URL cấu hình tùy ý, không theo redirect, không retry. Khởi động lại backend sau khi đổi cấu hình.

@@ -18,6 +18,7 @@ import com.example.assistant.domain.Emotion
 import com.example.assistant.ui.demo.DemoCommand
 import com.example.assistant.ui.demo.DemoState
 import com.example.assistant.ui.demo.reduceDemo
+import com.example.assistant.ui.memory.ConversationEntryCheckIn
 import com.example.assistant.ui.character.animationSpecFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -277,6 +278,7 @@ class ChatViewModel(
     private var talkJob: Job? = null
     private var screenActive = false
     private var typewriterEnabled = true
+    private val entryCheckIn = ConversationEntryCheckIn(viewModelScope, repo::checkIn, repo::cacheCheckIn)
     private val revealController = ReplyRevealController()
 
     fun setTypewriterEnabled(enabled: Boolean) {
@@ -333,7 +335,15 @@ class ChatViewModel(
     }
 
     init {
-        refresh()
+        if (initialConversationId == null) refresh()
+        // One real existing-conversation entry per ViewModel, retained across rotation.
+        initialConversationId?.let { id ->
+            viewModelScope.launch {
+                // History loads first, preventing refresh from removing a new cached check-in.
+                loadMessages(id)
+                if (conversationId.value == id) entryCheckIn.enter(id)
+            }
+        }
     }
 
     fun setTtsEnabled(enabled: Boolean) {
@@ -600,6 +610,7 @@ class ChatViewModel(
 
     fun newChat() {
         if (_ui.value.sending) return
+        entryCheckIn.leave()
         revealController.cancel()
         talkJob?.cancel()
         talkJob = null

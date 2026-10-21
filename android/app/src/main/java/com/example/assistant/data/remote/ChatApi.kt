@@ -13,6 +13,15 @@ import retrofit2.http.Path
  * chỉ cần sửa dòng @GET của health().
  */
 interface ChatApi {
+    @GET("api/v1/memories")
+    suspend fun memories(@Header("X-Client-Id") clientId: String): Response<ItemsResponse<MemoryDto>>
+
+    @DELETE("api/v1/memories/{id}")
+    suspend fun deleteMemory(@Path("id") id: String, @Header("X-Client-Id") clientId: String): Response<Unit>
+
+    @POST("api/v1/conversations/{id}/check-in")
+    suspend fun checkIn(@Path("id") id: String, @Header("X-Client-Id") clientId: String): Response<CheckInResponse>
+
     @GET("api/v1/health")
     suspend fun health(): Response<HealthResponse>
 

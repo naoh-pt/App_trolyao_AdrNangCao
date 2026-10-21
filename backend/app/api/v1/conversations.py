@@ -36,6 +36,8 @@ from app.services.request_guard import own_request
 from app.services.quick_reply_service import get_quick_reply
 from app.services.weather.service import get_weather_reply
 from app.services.weather.intent import parse_weather_intent
+from app.services.memory_service import parse_memory_command, memory_reply
+from app.services.memory_context import memory_data, using_memory
 from app.services.assistant_action_service import recognize_action
 from app.services.personality import ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION
 from app.utils.time import utc_now_iso
@@ -243,7 +245,7 @@ def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id
 
     action_dto = None
     # Relative calendar dates must retain the original request's clock on replay.
-    action_match = recognize_action(message, now=datetime.fromisoformat(user["created_at"].replace("Z", "+00:00")))
+    action_match = None if parse_memory_command(message) else recognize_action(message, now=datetime.fromisoformat(user["created_at"].replace("Z", "+00:00")))
     if action_match is not None and action_match.action is not None:
         action_dto = AssistantActionResponse(**action_match.action.to_dict())
 
@@ -302,10 +304,13 @@ def send_message(
 
         # Check deterministic assistant actions first (timer, calendar, map)
         action_now = datetime.now(timezone.utc)
-        action_match = recognize_action(normalized_msg, now=action_now)
+        memory_command = parse_memory_command(normalized_msg)
+        action_match = None if memory_command else recognize_action(normalized_msg, now=action_now)
         proposed_action = None
         weather_intent = None
-        if action_match is not None:
+        if memory_command is not None:
+            retrieved = []
+        elif action_match is not None:
             reply_text, reply_emotion = action_match.reply, action_match.emotion
             if action_match.action is not None:
                 proposed_action = AssistantActionResponse(**action_match.action.to_dict())
@@ -346,7 +351,8 @@ def send_message(
                                 retrieved = retrieve(normalized_msg)
                             except RAGUnavailableException as exc:
                                 logging.warning("RAG unavailable (%s); continuing with normal Gemini reply", exc.category)
-                        result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
+                        with using_memory(memory_data(db, client_id)):
+                            result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
                     else:
                         result = mock_ai.generate_reply(context, normalized_msg)
                 except Exception as exc:
@@ -360,7 +366,7 @@ def send_message(
                 if not isinstance(result, (tuple, list)) or len(result) != 2:
                     raise InvalidAIReplyException()
                 reply_text, reply_emotion = result
-        if weather_intent is None:
+        if weather_intent is None and memory_command is None:
             reply_text, reply_emotion = _validated_reply(reply_text, reply_emotion)
 
         user_msg_id = str(uuid.uuid4())
@@ -385,6 +391,8 @@ def send_message(
                 if weather_intent is not None:
                     # Same transaction commits both messages and replay record, or none.
                     reply_text, reply_emotion = _validated_reply(*get_weather_reply(normalized_msg, request_id=req_id))
+                if memory_command is not None:
+                    reply_text, reply_emotion = _validated_reply(*memory_reply(db, client_id, memory_command))
                 db.execute(
                     """INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
                        VALUES (?, ?, ?, ?, ?, ?)""",

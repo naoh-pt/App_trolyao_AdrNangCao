@@ -66,6 +66,23 @@ def init_db(db_path: Optional[str] = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_idempotency_lookup
                 ON idempotency_records(client_id, conversation_id, request_id);
 
+            CREATE TABLE IF NOT EXISTS personal_memories (
+                id TEXT PRIMARY KEY,
+                client_id TEXT NOT NULL,
+                kind TEXT NOT NULL CHECK(kind IN ('profile','preference','general','event')),
+                content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 300),
+                normalized_content TEXT NOT NULL,
+                event_date TEXT,
+                remind_on TEXT,
+                reminded_at TEXT,
+                expires_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(client_id, normalized_content)
+            );
+            CREATE INDEX IF NOT EXISTS idx_memories_owner ON personal_memories(client_id, created_at, id);
+            CREATE INDEX IF NOT EXISTS idx_memories_due ON personal_memories(client_id, reminded_at, remind_on);
+
             CREATE TABLE IF NOT EXISTS knowledge_documents (
                 id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,

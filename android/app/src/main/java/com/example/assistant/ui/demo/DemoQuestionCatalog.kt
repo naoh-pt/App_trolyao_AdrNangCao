@@ -2,7 +2,7 @@ package com.example.assistant.ui.demo
 
 enum class DemoCategory(val title: String, val enabled: Boolean = true) {
     Conversation("Trò chuyện"), Time("Thời gian"), Study("Học tập & RAG"),
-    Emotion("Cảm xúc"), Utilities("Tiện ích"), Weather("Thời tiết"),
+    Emotion("Cảm xúc"), Utilities("Tiện ích"), Weather("Thời tiết"), Memory("Trí nhớ"),
 }
 
 data class DemoQuestion(
@@ -52,13 +52,18 @@ object DemoQuestionCatalog {
         DemoQuestion("weather_rain", "Dự báo mưa", "Ngày mai Hà Nội có mưa không?", DemoCategory.Weather, requiresInternet = true),
         DemoQuestion("weather_temperature", "Nhiệt độ Bắc Ninh", "Nhiệt độ ở Bắc Ninh hôm nay bao nhiêu?", DemoCategory.Weather, requiresInternet = true),
         DemoQuestion("weather_raincoat", "Có cần áo mưa?", "Hôm nay mình có nên mang áo mưa ở Hà Nội không?", DemoCategory.Weather, requiresInternet = true),
+        DemoQuestion("memory_name", "Lưu tên", "Anna hãy nhớ: mình tên là Hoàn.", DemoCategory.Memory),
+        DemoQuestion("memory_preference", "Lưu sở thích", "Anna hãy nhớ: mình thích học Android.", DemoCategory.Memory),
+        DemoQuestion("memory_list", "Xem trí nhớ", "Anna nhớ gì về mình?", DemoCategory.Memory),
+        DemoQuestion("memory_event", "Nhắc khi vào trò chuyện", "Anna hãy nhớ: mình thi Android vào thứ Sáu tuần sau. Nhắc mình khi mở ứng dụng từ hôm nay.", DemoCategory.Memory),
+        DemoQuestion("memory_forget", "Quên sở thích", "Anna hãy quên việc mình thích học Android.", DemoCategory.Memory),
     )
 
     val scenarios: List<DemoScenario> = listOf(
         DemoScenario("quick", "Demo nhanh 3 phút", "Chào hỏi, giờ hiện tại và hai tiện ích quen thuộc.",
             listOf("chat_greeting", "time_now", "utility_timer", "utility_map_kma")),
         DemoScenario("full", "Demo đầy đủ", "Trò chuyện, RAG, cảm xúc và các tiện ích. Cần nạp tài liệu RAG.",
-            listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma", "weather_now")),
+            listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma", "weather_now", "memory_name", "memory_list")),
         DemoScenario("no_quota", "Demo không phụ thuộc quota", "Không cần quota AI; backend vẫn phải chạy",
             listOf("chat_greeting", "time_now", "time_weekday", "utility_timer", "utility_calendar", "utility_map_lake")),
     )
