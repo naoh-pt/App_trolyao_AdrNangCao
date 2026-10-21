@@ -32,6 +32,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.example.assistant.ui.demo.DemoCommand
+import com.example.assistant.ui.demo.DemoQuestionSheet
+import com.example.assistant.ui.demo.DemoScenarioControl
+import com.example.assistant.ui.demo.DemoReplacementDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -136,6 +143,13 @@ fun ChatScreen(
     displaySettings: ChatDisplaySettings = LocalChatDisplaySettings.current,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val onDemoCommand: (DemoCommand) -> Unit = { command ->
+        focusManager.clearFocus(force = true)
+        keyboard?.hide()
+        vm.onDemoCommand(command)
+    }
     val storedMessages by vm.messages.collectAsStateWithLifecycle()
     val messages = visibleChatMessages(storedMessages, ui.incomingAssistantId)
     val listState = rememberLazyListState()
@@ -422,6 +436,7 @@ fun ChatScreen(
                             }
 
                             val canSend = ui.online && !ui.sending && (pending != null || ui.input.isNotBlank())
+                            DemoScenarioControl(ui.demo, !ui.sending && pending == null, onDemoCommand)
                             Row(
                                 Modifier
                                     .fillMaxWidth()
@@ -444,6 +459,11 @@ fun ChatScreen(
                                     ),
                                 )
                                 IconButton(
+                                    onClick = { onDemoCommand(DemoCommand.Open) },
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Mở câu hỏi và kịch bản demo")
+                                }
+                                IconButton(
                                     onClick = onLaunchVoiceInput,
                                     enabled = canVoiceInput,
                                 ) {
@@ -463,6 +483,10 @@ fun ChatScreen(
             }
         }
     }
+    if (ui.demo.sheetOpen) {
+        DemoQuestionSheet(!ui.sending && pending == null, displaySettings.fontSizeSp, onDemoCommand)
+    }
+    ui.demo.pendingSelection?.let { DemoReplacementDialog(it, onDemoCommand) }
 }
 
 @Composable
