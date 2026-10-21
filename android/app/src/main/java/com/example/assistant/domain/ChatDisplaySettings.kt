@@ -13,6 +13,7 @@ import androidx.compose.runtime.compositionLocalOf
  */
 data class ChatDisplaySettings(
     val fontSizeSp: Int = DEFAULT_FONT_SIZE_SP,
+    val typewriterEnabled: Boolean = true,
 ) {
     val lineHeightSp: Int
         get() = fontSizeSp + LINE_HEIGHT_OFFSET_SP

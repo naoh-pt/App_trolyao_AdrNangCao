@@ -33,10 +33,10 @@ class SpeechAnimationSyncTest {
         assertEquals(CharacterState.THINKING, coordinator.characterState)
         assertEquals(Emotion.NEUTRAL, coordinator.emotion)
 
-        // Backend reply arrives with TTS enabled -> remains in THINKING until TTS starts
+        // Stage 13: receipt starts talk while speech is queued.
         coordinator.onReplyReceived("utt-1", Emotion.HAPPY, ttsEnabled = true)
         assertEquals("utt-1", coordinator.activeUtteranceId)
-        assertEquals(CharacterState.THINKING, coordinator.characterState)
+        assertEquals(CharacterState.TALKING, coordinator.characterState)
 
         // TTS starts speaking -> transitions to TALKING + NEUTRAL (loops "talk" animation)
         val started = coordinator.onSpeechStarted("utt-1")
@@ -262,7 +262,7 @@ class SpeechAnimationSyncTest {
     // =========================================================================
 
     @Test
-    fun testSpeechStoppedResetsToIdle() {
+    fun testSpeechStoppedPlaysFinalEmotion() {
         coordinator.onUserSendMessage()
         coordinator.onReplyReceived("utt-stop", Emotion.HAPPY, ttsEnabled = true)
         coordinator.onSpeechStarted("utt-stop")
@@ -270,8 +270,8 @@ class SpeechAnimationSyncTest {
         val stopped = coordinator.onSpeechStopped("utt-stop")
         assertTrue(stopped)
         assertNull(coordinator.activeUtteranceId)
-        assertEquals(CharacterState.IDLE, coordinator.characterState)
-        assertEquals(Emotion.NEUTRAL, coordinator.emotion)
+        assertEquals(CharacterState.TALKING, coordinator.characterState)
+        assertEquals(Emotion.HAPPY, coordinator.emotion)
     }
 
     @Test

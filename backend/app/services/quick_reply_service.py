@@ -1,7 +1,66 @@
 """Deterministic local quick replies for simple conversational intents."""
 
 import re
+import unicodedata
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
+
+VIETNAM_TZ = timezone(timedelta(hours=7))
+_WEEKDAYS = ("thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy", "Chủ nhật")
+
+# Accent folding applies only to these new intents; legacy matching stays unchanged.
+# Only a complete question with optional address/polite wrappers is accepted.
+_LOCAL_TIME_PATTERNS = {
+    "time": r"(?:(?:bay gio|hien tai) (?:la )?)?may gio(?: roi)?",
+    "date": r"(?:hom nay|ngay hom nay) (?:la )?ngay (?:bao nhieu|may)",
+    "weekday": r"(?:hom nay|ngay hom nay) (?:la )?thu may",
+    "day_period": r"(?:bay gio|hien tai) (?:dang )?(?:la )?buoi (?:gi|sang hay toi)",
+}
+_LOCAL_TIME_PATTERNS = {
+    intent: re.compile(
+        r"(?:anna(?: oi)?\s*,?\s+)?(?:cho (?:minh|toi) hoi )?"
+        + pattern + r"(?: (?:nhe|nha|a))?"
+    )
+    for intent, pattern in _LOCAL_TIME_PATTERNS.items()
+}
+
+
+def _local_time_reply(normalized: str, now: Optional[datetime]) -> Optional[Tuple[str, str]]:
+    folded = "".join(
+        char for char in unicodedata.normalize("NFD", normalized)
+        if unicodedata.category(char) != "Mn"
+    ).replace("đ", "d")
+    intent = next((key for key, pattern in _LOCAL_TIME_PATTERNS.items() if pattern.fullmatch(folded)), None)
+    if intent is None:
+        return None
+    if now is None:
+        local = datetime.now(VIETNAM_TZ)
+    else:
+        if now.tzinfo is None or now.utcoffset() is None:
+            raise ValueError("now must be timezone-aware")
+        local = now.astimezone(VIETNAM_TZ)
+    if intent == "time":
+        reply = f"Bây giờ là {local.hour:02d} giờ {local.minute:02d} phút nhé!"
+    elif intent == "date":
+        reply = f"Hôm nay là ngày {local:%d/%m/%Y} nhé!"
+    elif intent == "weekday":
+        reply = f"Hôm nay là {_WEEKDAYS[local.weekday()]}, ngày {local:%d/%m/%Y} nhé!"
+    else:
+        # Vietnam time: morning 05–10, noon 11–12, afternoon 13–17,
+        # evening 18–22, night 23–04 (inclusive hours).
+        hour = local.hour
+        if 5 <= hour < 11:
+            period = "buổi sáng"
+        elif 11 <= hour < 13:
+            period = "buổi trưa"
+        elif 13 <= hour < 18:
+            period = "buổi chiều"
+        elif 18 <= hour < 23:
+            period = "buổi tối"
+        else:
+            period = "ban đêm"
+        reply = f"Bây giờ là {period} nhé!"
+    return reply, "happy"
 
 # Supported intent patterns with conservative matching (start and end anchored)
 _INTENT_PATTERNS = {
@@ -75,10 +134,12 @@ def normalize_for_quick_reply(text: str) -> str:
     return cleaned
 
 
-def get_quick_reply(message: str) -> Optional[Tuple[str, str]]:
+def get_quick_reply(message: str, *, now: Optional[datetime] = None) -> Optional[Tuple[str, str]]:
     """Determine if a message matches a deterministic quick-reply intent.
 
     Returns (reply_text, emotion) if matched, or None if the message should proceed to AI/RAG.
+    Optional timezone-aware ``now`` makes local time replies deterministic in tests.
+    Production callers keep using get_quick_reply(message); no machine timezone is used.
     """
     normalized = normalize_for_quick_reply(message)
     if not normalized:
@@ -88,4 +149,4 @@ def get_quick_reply(message: str) -> Optional[Tuple[str, str]]:
         if pattern.match(normalized):
             return QUICK_REPLIES[intent]
 
-    return None
+    return _local_time_reply(normalized, now)

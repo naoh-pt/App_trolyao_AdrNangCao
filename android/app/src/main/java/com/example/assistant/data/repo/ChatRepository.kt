@@ -90,10 +90,18 @@ class ChatRepository(
 
 
     /** Dùng lại cùng requestId khi thử lại để backend không tạo tin nhắn kép. Trả về tin nhắn của trợ lý và hành động đính kèm (nếu có). */
-    suspend fun sendMessage(conversationId: String, requestId: String, text: String): Result<AssistantReply> = safe {
+    suspend fun sendMessage(
+        conversationId: String,
+        requestId: String,
+        text: String,
+        beforeAssistantCached: (MessageEntity) -> Unit = {},
+    ): Result<AssistantReply> = safe {
         val resp = call { api, cid -> api.sendMessage(conversationId, cid, SendMessageRequest(requestId, text)) }
         val user = resp.userMessage.toEntity(conversationId)
         val bot = resp.assistantMessage.toEntity(conversationId)
+        // Let presentation mask this exact row before Room can publish the complete text.
+        // Persistence still always receives the complete, unchanged response.
+        beforeAssistantCached(bot)
         msgDao.upsertAll(listOf(user, bot))
         refreshConversations() // cập nhật tiêu đề / updated_at, lỗi cũng bỏ qua
         val action = resp.action ?: resp.assistantMessage.action
