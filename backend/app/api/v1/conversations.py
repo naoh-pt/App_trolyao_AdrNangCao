@@ -3,6 +3,7 @@
 import sqlite3
 import uuid
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Response, status
 
@@ -231,7 +232,8 @@ def _saved_response(db: sqlite3.Connection, req_id: str, client_id: str, conv_id
         raise RuntimeError("Idempotency record refers to missing messages")
 
     action_dto = None
-    action_match = recognize_action(message)
+    # Relative calendar dates must retain the original request's clock on replay.
+    action_match = recognize_action(message, now=datetime.fromisoformat(user["created_at"].replace("Z", "+00:00")))
     if action_match is not None and action_match.action is not None:
         action_dto = AssistantActionResponse(**action_match.action.to_dict())
 
@@ -289,7 +291,8 @@ def send_message(
             return saved
 
         # Check deterministic assistant actions first (timer, calendar, map)
-        action_match = recognize_action(normalized_msg)
+        action_now = datetime.now(timezone.utc)
+        action_match = recognize_action(normalized_msg, now=action_now)
         proposed_action = None
         if action_match is not None:
             reply_text, reply_emotion = action_match.reply, action_match.emotion
@@ -351,7 +354,9 @@ def send_message(
 
         user_msg_id = str(uuid.uuid4())
         asst_msg_id = str(uuid.uuid4())
-        now_ts = utc_now_iso()
+        # Local-action timestamps also serve as their deterministic replay reference.
+        now_ts = (action_now.isoformat(timespec="microseconds").replace("+00:00", "Z")
+                  if action_match is not None else utc_now_iso())
         try:
             with db:
                 # BEGIN IMMEDIATE prevents deletion between the ownership recheck and inserts.
