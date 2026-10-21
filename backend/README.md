@@ -289,6 +289,36 @@ Khi phát triển với chế độ tự động tải lại (reload):
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+## Chế độ đồng hành và cá nhân hóa (Stage 16)
+
+Khởi động backend như cũ: bảng `companion_preferences` được thêm bằng `CREATE TABLE IF NOT EXISTS`, không sửa trí nhớ/lịch sử cũ, không cần API key hoặc dependency mới. Không chỉnh file `.env` hiện tại.
+
+Hai API dùng header `X-Client-Id` hiện có:
+
+- `GET /api/v1/companion-preferences`: giá trị đã lưu hoặc mặc định, không tạo bản ghi khi chỉ đọc.
+- `PUT /api/v1/companion-preferences`: thay thế nguyên bộ lựa chọn của client trong một transaction. Enum/tên không hợp lệ trả HTTP 400 theo kiểu lỗi chung của dự án. Không gọi AI/RAG.
+
+```json
+{
+  "preferred_name": "Hoàn",
+  "address_style": "anna_ban",
+  "humor_level": "medium",
+  "response_length": "medium",
+  "support_style": "balanced",
+  "mood_check_in_enabled": true
+}
+```
+
+Tên mặc định trống, tối đa 30 ký tự, một dòng, không ký tự điều khiển/chỉ dẫn. Cách xưng hô: `anna_ban`, `minh_ban`, `chi_em`, `em_anh`, `em_chi`; không suy đoán giới tính. Hài hước: `low/medium/high`. Độ dài: `short/medium/detailed`. Hỗ trợ: `balanced/listen_first/advice_first/solve_together`. Tên chỉ dùng tự nhiên, vừa phải; lựa chọn này không ghi đè trí nhớ Stage 15.
+
+Prompt Gemini/Groq dùng chung thứ tự: an toàn → tính cách Anna → chính sách đồng hành → lựa chọn được kiểm tra → trí nhớ không đáng tin cậy → RAG → lịch sử/tin hiện tại. Yêu cầu lắng nghe/góp ý/cùng giải quyết trong tin hiện tại ưu tiên hơn lựa chọn hỗ trợ mặc định. Nội dung nghiêm túc luôn tắt hài hước. Anna là AI hỗ trợ, không phải người hay người thay thế bạn bè/chuyên gia; không chẩn đoán, tạo phụ thuộc hay thao túng bằng trí nhớ. Nguy hiểm tức thời được phản hồi bình tĩnh, khuyến khích liên hệ người tin cậy ở gần và hỗ trợ chuyên môn/khẩn cấp phù hợp, không tra cứu hotline qua web. Weather, action, quick reply và lệnh trí nhớ giữ câu trả lời xác định, không bị cá nhân hóa hoặc gửi qua AI.
+
+Android: Cài đặt → **Cá nhân hóa Anna**, chỉnh và nhấn **Lưu thay đổi**. Rời khi chưa lưu có xác nhận; lưu lỗi giữ bản chỉnh sửa. Mood card chỉ xét sau khi vào chat đã tồn tại, Stage 15 trả kết quả không có lời nhắc, tải được cài đặt bật mood, và thiết bị chưa đánh dấu ngày đó cho client này. Marker ngày được dành nguyên tử ngay trước khi hiện để tránh hai chat hiện trùng; xoay máy/tái tổ hợp/đổi chat không tạo thẻ mới cùng ngày. Ngày tính theo lịch địa phương trên thiết bị; chỉ kiểm tra lúc vào chat, không polling. Lỗi/đổi chat đúng lúc có thể tiêu thụ marker mà chưa thấy thẻ; thử lại ở lần vào ngày sau, không có thông báo nền.
+
+Thẻ tâm trạng và ba lựa chọn hỗ trợ nằm trong danh sách chat, không thay kích thước nhân vật. Chọn là thao tác gửi rõ ràng, qua luồng gửi/request-id/TTS/typewriter hiện có và giữ nguyên bản nháp đang gõ. Không chọn thì không gửi/đọc/đổi animation. Không lưu mood history hay nhãn tâm lý; chỉ các tin nhắn người dùng chủ động gửi mới nằm trong lịch sử chat thông thường. Bộ nhận biết hỗ trợ dùng quy tắc Unicode bảo thủ, có thể bỏ sót; không là công cụ chẩn đoán. Cá nhân hóa câu trả lời thật cần provider AI hoạt động; toàn bộ kiểm thử tự động dùng fake.
+
+Kiểm thử offline: `.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_companion.py`.
+
 ## Trí nhớ cá nhân và lời nhắc trong ứng dụng (Stage 15)
 
 Khởi động backend như cũ. `init_db()` thêm bảng `personal_memories` và chỉ mục bằng `CREATE TABLE/INDEX IF NOT EXISTS`, giữ nguyên bảng/lịch sử trò chuyện hiện có. Không cần dependency, API key, cấu hình `.env` hay migration phá dữ liệu. Kiểm thử nâng cấp chỉ chạy với database tạm.

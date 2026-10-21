@@ -200,7 +200,7 @@ class MemoryFeatureTest {
             assertEquals(question.prompt, state.input)
             assertEquals(ChatUiState(), state.copy(input = "", demo = DemoState()))
         }
-        assertEquals(listOf("memory_name", "memory_list"), DemoQuestionCatalog.scenario("full")!!.questionIds.takeLast(2))
+        assertEquals(listOf("memory_name", "memory_list"), DemoQuestionCatalog.scenario("full")!!.questionIds.drop(9).take(2))
         for (id in listOf("quick", "no_quota")) {
             assertTrue(DemoQuestionCatalog.scenario(id)!!.questionIds.none { it.startsWith("memory_") })
         }

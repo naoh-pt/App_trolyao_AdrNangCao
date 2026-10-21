@@ -74,7 +74,7 @@ private val AnimationActionItems = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit, onMemory: () -> Unit = {}) {
+fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit, onMemory: () -> Unit = {}, onCompanion: () -> Unit = {}) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val ttsHelper = rememberVietnameseTts()
     CuteBackground {
@@ -101,6 +101,9 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit, onMemory: () -> Un
                 contentPadding = PaddingValues(vertical = 16.dp),
             ) {
                 // Section 1: Backend Connection
+                item {
+                    OutlinedButton(onClick = onCompanion, modifier = Modifier.fillMaxWidth()) { Text("Cá nhân hóa Anna") }
+                }
                 item {
                     OutlinedButton(onClick = onMemory, modifier = Modifier.fillMaxWidth()) { Text("Trí nhớ của Anna") }
                 }

@@ -6,6 +6,8 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.PUT
+import com.example.assistant.domain.CompanionPreferences
 import retrofit2.http.Path
 
 /**
@@ -13,6 +15,11 @@ import retrofit2.http.Path
  * chỉ cần sửa dòng @GET của health().
  */
 interface ChatApi {
+    @GET("api/v1/companion-preferences")
+    suspend fun companion(@Header("X-Client-Id") clientId: String): Response<CompanionPreferences>
+
+    @PUT("api/v1/companion-preferences")
+    suspend fun saveCompanion(@Header("X-Client-Id") clientId: String, @Body body: CompanionPreferences): Response<CompanionPreferences>
     @GET("api/v1/memories")
     suspend fun memories(@Header("X-Client-Id") clientId: String): Response<ItemsResponse<MemoryDto>>
 

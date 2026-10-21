@@ -80,6 +80,8 @@ class DemoScenarioControllerTest {
         assertEquals("Anna hãy nhớ: mình tên là Hoàn.", state.input)
         state = state.navigate(DemoCommand.Next)
         assertEquals("Anna nhớ gì về mình?", state.input)
+        state = state.navigate(DemoCommand.Next)
+        assertEquals("Hôm nay mình bị điểm thấp và cảm thấy thất vọng.", state.input)
         assertEquals(state, state.reduceDemo(DemoCommand.Next))
         assertTrue(state.reduceDemo(DemoCommand.Complete).demo.progress!!.completed)
         assertFalse(state.sending)

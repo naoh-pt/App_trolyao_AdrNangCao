@@ -38,6 +38,7 @@ from app.services.weather.service import get_weather_reply
 from app.services.weather.intent import parse_weather_intent
 from app.services.memory_service import parse_memory_command, memory_reply
 from app.services.memory_context import memory_data, using_memory
+from app.services.companion_service import load_preferences, using_companion
 from app.services.assistant_action_service import recognize_action
 from app.services.personality import ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION
 from app.utils.time import utc_now_iso
@@ -351,7 +352,7 @@ def send_message(
                                 retrieved = retrieve(normalized_msg)
                             except RAGUnavailableException as exc:
                                 logging.warning("RAG unavailable (%s); continuing with normal Gemini reply", exc.category)
-                        with using_memory(memory_data(db, client_id)):
+                        with using_memory(memory_data(db, client_id)), using_companion(load_preferences(db, client_id)):
                             result = ai_service.generate_reply(context, normalized_msg, prompt_context(retrieved))
                     else:
                         result = mock_ai.generate_reply(context, normalized_msg)

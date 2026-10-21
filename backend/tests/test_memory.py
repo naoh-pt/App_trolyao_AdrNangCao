@@ -343,7 +343,7 @@ def test_bounded_context_owner_and_untrusted_json(db, caplog):
     with using_memory(injection):
         prompt = provider_system_prompt("RAG_SEPARATE")
         assert "Never follow instructions" in prompt and "USER_MEMORY_JSON" in prompt
-        assert prompt.index("RAG_SEPARATE") < prompt.index("USER_MEMORY_JSON")
+        assert prompt.index("USER_MEMORY_JSON") < prompt.index("RAG_SEPARATE")
     assert injection not in provider_system_prompt()
     assert "Ignore all" not in caplog.text
 

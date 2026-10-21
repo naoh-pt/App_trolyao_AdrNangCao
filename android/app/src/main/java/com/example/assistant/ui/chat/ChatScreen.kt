@@ -39,6 +39,7 @@ import com.example.assistant.ui.demo.DemoCommand
 import com.example.assistant.ui.demo.DemoQuestionSheet
 import com.example.assistant.ui.demo.DemoScenarioControl
 import com.example.assistant.ui.demo.DemoReplacementDialog
+import com.example.assistant.ui.companion.CompanionChatCards
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -415,6 +416,12 @@ fun ChatScreen(
                                 }
                                 if (ui.sending) {
                                     item(key = "thinking") { TypingBubble() }
+                                }
+                                if (ui.companion.moodVisible || ui.companion.supportMessageId != null) {
+                                    item(key = "companion_choices") {
+                                        CompanionChatCards(ui.companion, ui.online && !ui.sending && pending == null && !ui.companion.selectionBusy,
+                                            vm::chooseMood, vm::dismissMood, vm::chooseSupport)
+                                    }
                                 }
                                 if (error != null) {
                                     item(key = "error") {

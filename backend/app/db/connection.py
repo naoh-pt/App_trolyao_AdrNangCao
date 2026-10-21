@@ -83,6 +83,18 @@ def init_db(db_path: Optional[str] = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_memories_owner ON personal_memories(client_id, created_at, id);
             CREATE INDEX IF NOT EXISTS idx_memories_due ON personal_memories(client_id, reminded_at, remind_on);
 
+            CREATE TABLE IF NOT EXISTS companion_preferences (
+                client_id TEXT PRIMARY KEY,
+                preferred_name TEXT,
+                address_style TEXT NOT NULL DEFAULT 'anna_ban',
+                humor_level TEXT NOT NULL DEFAULT 'medium',
+                response_length TEXT NOT NULL DEFAULT 'medium',
+                support_style TEXT NOT NULL DEFAULT 'balanced',
+                mood_check_in_enabled INTEGER NOT NULL DEFAULT 1 CHECK(mood_check_in_enabled IN (0,1)),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS knowledge_documents (
                 id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,
