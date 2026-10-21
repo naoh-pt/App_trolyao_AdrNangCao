@@ -123,6 +123,10 @@ class SettingsViewModel(
         }
     }
 
+    fun setTypewriterEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setTypewriterEnabled(enabled) }
+    }
+
     fun decreaseMessageFontSize() {
         if (!_ui.value.chatDisplaySettings.canDecrease()) return
         viewModelScope.launch {

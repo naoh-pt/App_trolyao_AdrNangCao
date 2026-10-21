@@ -63,6 +63,11 @@ data class ChatUiState(
     val characterState: CharacterState = CharacterState.IDLE,
     val emotion: Emotion = Emotion.NEUTRAL,
     val input: String = "",
+    val reveal: ReplyReveal? = null,
+    val playbackToken: String? = null,
+    val speechActive: Boolean = false,
+    /** Only this incoming row is hidden until the send result starts its presentation. */
+    val incomingAssistantId: String? = null,
     /** Tin đang gửi / gửi lỗi (bản nháp giữ nguyên + cùng request_id để thử lại). */
     val pending: String? = null,
     val sending: Boolean = false,
@@ -124,127 +129,95 @@ fun extractSpeechRecognitionResult(resultCode: Int, data: Intent?): String? {
     return extractSpeechRecognitionText(resultCode, results)
 }
 
-/**
- * Centralized coordinator for character animation state synchronized with TTS lifecycle.
- *
- * Guarantees:
- * - Entering THINKING when user sends a message.
- * - Looping TALK throughout active TTS duration.
- * - Briefly showing response emotion (happy, sad, surprised) upon TTS completion, then returning to IDLE.
- * - Directly returning to IDLE upon completion for neutral responses.
- * - Safely showing emotion then IDLE when TTS is disabled or errors.
- * - Stale callbacks from previous utterances are safely rejected via unique utterance IDs.
- */
+/** One coordinator joins text and speech completion before the existing emotion player. */
+enum class ReplyPhase { Idle, Thinking, RevealingOrSpeaking, FinalEmotion }
+
 class SpeechAnimationCoordinator(
     initialState: CharacterState = CharacterState.IDLE,
     initialEmotion: Emotion = Emotion.NEUTRAL,
 ) {
-    var characterState: CharacterState = initialState
+    var characterState = initialState
         private set
-
-    var emotion: Emotion = initialEmotion
+    var emotion = initialEmotion
         private set
-
+    var phase = ReplyPhase.Idle
+        private set
+    var token: String? = null
+        private set
     var activeUtteranceId: String? = null
         private set
-
-    var pendingResponseEmotion: Emotion = Emotion.NEUTRAL
+    var pendingResponseEmotion = Emotion.NEUTRAL
         private set
+    private var revealing = false
 
-    /** User sends a message -> enter THINKING and invalidate active speech. */
     fun onUserSendMessage() {
-        activeUtteranceId = null
-        pendingResponseEmotion = Emotion.NEUTRAL
+        onReset()
+        phase = ReplyPhase.Thinking
         characterState = CharacterState.THINKING
-        emotion = Emotion.NEUTRAL
     }
 
-    /**
-     * Backend reply received.
-     * If TTS is enabled, registers the utterance and remains THINKING until speech actually starts.
-     * If TTS is disabled, immediately shows the response emotion.
-     */
     fun onReplyReceived(
         utteranceId: String,
         responseEmotion: Emotion,
         ttsEnabled: Boolean,
+        revealActive: Boolean = false,
     ) {
+        token = utteranceId
         pendingResponseEmotion = responseEmotion
-        if (ttsEnabled) {
-            activeUtteranceId = utteranceId
-            // Character remains in THINKING until onSpeechStarted
+        activeUtteranceId = utteranceId.takeIf { ttsEnabled }
+        revealing = revealActive
+        phase = ReplyPhase.RevealingOrSpeaking
+        settle()
+    }
+
+    private fun settle() {
+        if (revealing || activeUtteranceId != null) {
+            phase = ReplyPhase.RevealingOrSpeaking
+            characterState = CharacterState.TALKING
+            emotion = Emotion.NEUTRAL
+        } else if (pendingResponseEmotion != Emotion.NEUTRAL) {
+            phase = ReplyPhase.FinalEmotion
+            characterState = CharacterState.TALKING
+            emotion = pendingResponseEmotion
         } else {
-            activeUtteranceId = null
-            if (responseEmotion != Emotion.NEUTRAL) {
-                characterState = CharacterState.TALKING
-                emotion = responseEmotion
-            } else {
-                characterState = CharacterState.IDLE
-                emotion = Emotion.NEUTRAL
-            }
+            phase = ReplyPhase.Idle
+            characterState = CharacterState.IDLE
+            emotion = Emotion.NEUTRAL
         }
     }
 
-    /** TTS engine starts speaking the active utterance -> enter TALKING with NEUTRAL (loops "talk"). */
-    fun onSpeechStarted(utteranceId: String): Boolean {
-        if (utteranceId != activeUtteranceId) return false
-        characterState = CharacterState.TALKING
-        emotion = Emotion.NEUTRAL
+    fun onRevealCompleted(replyToken: String): Boolean {
+        if (replyToken != token || !revealing) return false
+        revealing = false
+        settle()
         return true
     }
 
-    /**
-     * TTS engine finishes speaking the active utterance.
-     * Non-neutral emotion is displayed briefly; neutral returns directly to IDLE.
-     */
+    fun onSpeechStarted(utteranceId: String): Boolean = utteranceId == activeUtteranceId
+
     fun onSpeechCompleted(utteranceId: String): Boolean {
         if (utteranceId != activeUtteranceId) return false
         activeUtteranceId = null
-        val respEmotion = pendingResponseEmotion
-        if (respEmotion != Emotion.NEUTRAL) {
-            characterState = CharacterState.TALKING
-            emotion = respEmotion
-        } else {
-            characterState = CharacterState.IDLE
-            emotion = Emotion.NEUTRAL
-        }
+        settle()
         return true
     }
 
-    /** TTS reports error or failure to start -> safely exit TALKING. */
-    fun onSpeechError(utteranceId: String): Boolean {
-        if (utteranceId != activeUtteranceId) return false
-        activeUtteranceId = null
-        val respEmotion = pendingResponseEmotion
-        if (respEmotion != Emotion.NEUTRAL) {
-            characterState = CharacterState.TALKING
-            emotion = respEmotion
-        } else {
-            characterState = CharacterState.IDLE
-            emotion = Emotion.NEUTRAL
-        }
-        return true
-    }
+    fun onSpeechError(utteranceId: String): Boolean = onSpeechCompleted(utteranceId)
+    fun onSpeechStopped(utteranceId: String): Boolean = onSpeechCompleted(utteranceId)
 
-    /** Speech stopped/interrupted. */
-    fun onSpeechStopped(utteranceId: String): Boolean {
-        if (utteranceId != activeUtteranceId) return false
-        activeUtteranceId = null
-        characterState = CharacterState.IDLE
-        emotion = Emotion.NEUTRAL
-        return true
-    }
-
-    /** Called when the brief emotion display or one-shot animation finishes. */
-    fun onEmotionDisplayFinished() {
+    fun onEmotionDisplayFinished(replyToken: String? = token) {
+        if (replyToken != token || phase != ReplyPhase.FinalEmotion) return
+        phase = ReplyPhase.Idle
         characterState = CharacterState.IDLE
         emotion = Emotion.NEUTRAL
     }
 
-    /** Full reset (new chat or screen disposed). */
     fun onReset() {
+        token = null
         activeUtteranceId = null
+        revealing = false
         pendingResponseEmotion = Emotion.NEUTRAL
+        phase = ReplyPhase.Idle
         characterState = CharacterState.IDLE
         emotion = Emotion.NEUTRAL
     }
@@ -289,7 +262,7 @@ class ChatViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _speechEvents = MutableSharedFlow<SpeechEvent>(replay = 0, extraBufferCapacity = 1)
-    /** One-time speech events emitted strictly when a new assistant response is received. */
+    /** One-time speech commands for new replies and explicit replay; never for history loading. */
     val speechEvents: SharedFlow<SpeechEvent> = _speechEvents.asSharedFlow()
 
     private val _stopSpeechEvents = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
@@ -298,6 +271,62 @@ class ChatViewModel(
 
     private var requestId: String? = null
     private var talkJob: Job? = null
+    private var screenActive = false
+    private var typewriterEnabled = true
+    private val revealController = ReplyRevealController()
+
+    fun setTypewriterEnabled(enabled: Boolean) {
+        typewriterEnabled = enabled
+        if (!enabled) skipReveal(_ui.value.reveal?.messageId ?: return)
+    }
+
+    fun onScreenStarted() {
+        screenActive = true
+        if (_ui.value.sending) coordinator.onUserSendMessage()
+        syncPlayback()
+    }
+
+    private fun syncPlayback() {
+        _ui.update { it.copy(characterState = coordinator.characterState,
+            emotion = coordinator.emotion, playbackToken = coordinator.token,
+            speechActive = coordinator.activeUtteranceId != null) }
+    }
+
+    fun advanceReveal(token: String) {
+        if (!screenActive) return
+        val next = revealController.advance(token) ?: return
+        _ui.update { it.copy(reveal = next) }
+        if (next.complete && coordinator.onRevealCompleted(token)) {
+            syncPlayback()
+            scheduleEmotionWatchdog()
+        }
+    }
+
+    fun skipReveal(messageId: String) {
+        val reveal = revealController.skip(messageId) ?: return
+        _ui.update { it.copy(reveal = reveal) }
+        if (coordinator.onRevealCompleted(reveal.token)) {
+            syncPlayback()
+            scheduleEmotionWatchdog()
+        }
+    }
+
+    fun stopReading() {
+        val id = coordinator.activeUtteranceId ?: return
+        _stopSpeechEvents.tryEmit(Unit)
+        onSpeechStopped(id)
+    }
+
+    fun replay(message: MessageEntity) {
+        if (!screenActive || _ui.value.sending || message.role != "assistant" || message.text.isBlank()) return
+        skipReveal(message.id)
+        talkJob?.cancel()
+        _stopSpeechEvents.tryEmit(Unit)
+        val token = UUID.randomUUID().toString()
+        coordinator.onReplyReceived(token, Emotion.from(message.emotion), ttsEnabled = true)
+        syncPlayback()
+        _speechEvents.tryEmit(SpeechEvent(token, message.text))
+    }
 
     init {
         refresh()
@@ -305,6 +334,7 @@ class ChatViewModel(
 
     fun setTtsEnabled(enabled: Boolean) {
         isTtsEnabled = enabled
+        if (!enabled) stopReading()
     }
 
     /** Tải lại từ server; nếu chưa có chat thì tạo mới. */
@@ -359,6 +389,7 @@ class ChatViewModel(
 
         talkJob?.cancel()
         talkJob = null
+        revealController.startRequest(messages.value.map { it.id })
         _stopSpeechEvents.tryEmit(Unit)
         coordinator.onUserSendMessage()
         _ui.update {
@@ -367,6 +398,10 @@ class ChatViewModel(
                 input = if (s.pending == null) "" else it.input,
                 error = null,
                 sending = true,
+                reveal = null,
+                playbackToken = null,
+                speechActive = false,
+                incomingAssistantId = null,
                 characterState = coordinator.characterState,
                 emotion = coordinator.emotion,
             )
@@ -383,7 +418,11 @@ class ChatViewModel(
                 id = created.getOrThrow().id
                 conversationId.value = id
             }
-            repo.sendMessage(id, rid, text).fold(
+            repo.sendMessage(id, rid, text, beforeAssistantCached = { message ->
+                if (messages.value.none { it.id == message.id }) {
+                    _ui.update { it.copy(incomingAssistantId = message.id) }
+                }
+            }).fold(
                 onSuccess = { reply ->
                     requestId = null
                     val botMsg = reply.message
@@ -393,8 +432,13 @@ class ChatViewModel(
                     talkJob?.cancel()
                     talkJob = null
 
-                    val willSpeak = isTtsEnabled && botMsg.text.isNotBlank()
-                    coordinator.onReplyReceived(utteranceId, emotion, ttsEnabled = willSpeak)
+                    val isNew = revealController.receive(botMsg.id, utteranceId, botMsg.text,
+                        typewriterEnabled, screenActive)
+                    val reveal = revealController.current
+                    val willSpeak = screenActive && isNew && isTtsEnabled && botMsg.text.isNotBlank()
+                    if (screenActive && isNew) {
+                        coordinator.onReplyReceived(utteranceId, emotion, willSpeak, reveal != null)
+                    } else coordinator.onReset()
                     _ui.update {
                         val updatedActions = if (botAction != null) {
                             it.activeActions + (botMsg.id to botAction)
@@ -404,6 +448,10 @@ class ChatViewModel(
                         it.copy(
                             pending = null,
                             sending = false,
+                            reveal = reveal,
+                            playbackToken = coordinator.token,
+                            speechActive = willSpeak,
+                            incomingAssistantId = null,
                             error = null,
                             characterState = coordinator.characterState,
                             emotion = coordinator.emotion,
@@ -428,8 +476,10 @@ class ChatViewModel(
         val currentEmotion = coordinator.emotion
         if (coordinator.characterState == CharacterState.TALKING && currentEmotion != Emotion.NEUTRAL) {
             val watchdogMs = calculateEmotionWatchdogDurationMs(currentEmotion, fpsSettings)
+            val token = coordinator.token
             talkJob = viewModelScope.launch {
                 delay(watchdogMs)
+                if (token != coordinator.token || coordinator.phase != ReplyPhase.FinalEmotion) return@launch
                 // Watchdog recovery only triggers if normal animation completion callback was missed
                 coordinator.onEmotionDisplayFinished()
                 _ui.update { current ->
@@ -450,7 +500,7 @@ class ChatViewModel(
         if (coordinator.onSpeechStarted(utteranceId)) {
             talkJob?.cancel()
             talkJob = null
-            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+            syncPlayback()
         }
     }
 
@@ -458,7 +508,7 @@ class ChatViewModel(
         if (coordinator.onSpeechCompleted(utteranceId)) {
             talkJob?.cancel()
             talkJob = null
-            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+            syncPlayback()
             scheduleEmotionWatchdog()
         }
     }
@@ -467,7 +517,7 @@ class ChatViewModel(
         if (coordinator.onSpeechError(utteranceId)) {
             talkJob?.cancel()
             talkJob = null
-            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+            syncPlayback()
             scheduleEmotionWatchdog()
         }
     }
@@ -476,7 +526,8 @@ class ChatViewModel(
         if (coordinator.onSpeechStopped(utteranceId)) {
             talkJob?.cancel()
             talkJob = null
-            _ui.update { it.copy(characterState = coordinator.characterState, emotion = coordinator.emotion) }
+            syncPlayback()
+            scheduleEmotionWatchdog()
         }
     }
 
@@ -487,18 +538,22 @@ class ChatViewModel(
     }
 
     fun onScreenDisposed() {
+        screenActive = false
+        revealController.cancel()
         talkJob?.cancel()
         talkJob = null
         coordinator.onReset()
         _stopSpeechEvents.tryEmit(Unit)
-        _ui.update { it.copy(characterState = CharacterState.IDLE, emotion = Emotion.NEUTRAL) }
+        _ui.update { it.copy(characterState = CharacterState.IDLE, emotion = Emotion.NEUTRAL,
+            reveal = null, speechActive = false, playbackToken = null) }
     }
 
     /**
      * Callback invoked when a one-shot emotional animation finishes playback.
      * Transitions character back to IDLE + NEUTRAL only if currently in an emotional TALKING state.
      */
-    fun onCharacterAnimationFinished() {
+    fun onCharacterAnimationFinished(token: String? = coordinator.token) {
+        if (token != coordinator.token || coordinator.phase != ReplyPhase.FinalEmotion) return
         val s = _ui.value
         if (!canHandleAnimationFinished(s.characterState, s.emotion)) {
             return
@@ -510,6 +565,7 @@ class ChatViewModel(
     }
 
     private fun fail(e: Throwable?) {
+        revealController.cancel()
         talkJob?.cancel()
         talkJob = null
         coordinator.onReset()
@@ -517,6 +573,10 @@ class ChatViewModel(
         _ui.update {
             it.copy(
                 sending = false,
+                reveal = null,
+                speechActive = false,
+                playbackToken = null,
+                incomingAssistantId = null,
                 characterState = CharacterState.IDLE,
                 emotion = Emotion.NEUTRAL,
                 error = e?.message ?: "Đã có lỗi xảy ra",
@@ -532,6 +592,7 @@ class ChatViewModel(
 
     fun newChat() {
         if (_ui.value.sending) return
+        revealController.cancel()
         talkJob?.cancel()
         talkJob = null
         requestId = null

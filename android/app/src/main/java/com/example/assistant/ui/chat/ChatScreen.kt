@@ -7,6 +7,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -126,7 +136,8 @@ fun ChatScreen(
     displaySettings: ChatDisplaySettings = LocalChatDisplaySettings.current,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val messages by vm.messages.collectAsStateWithLifecycle()
+    val storedMessages by vm.messages.collectAsStateWithLifecycle()
+    val messages = visibleChatMessages(storedMessages, ui.incomingAssistantId)
     val listState = rememberLazyListState()
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val panelFraction = if (imeVisible) ChatPanelKeyboardFraction else ChatPanelClosedFraction
@@ -135,6 +146,35 @@ fun ChatScreen(
 
     val ttsHelper = rememberVietnameseTts()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val callbackScope = rememberCoroutineScope()
+
+    DisposableEffect(vm, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) vm.onScreenStarted()
+            if (event == Lifecycle.Event.ON_STOP) {
+                ttsHelper.stop()
+                vm.onScreenDisposed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) vm.onScreenStarted()
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(displaySettings.typewriterEnabled) {
+        vm.setTypewriterEnabled(displaySettings.typewriterEnabled)
+    }
+    val reveal = ui.reveal
+    LaunchedEffect(vm, reveal?.token, reveal?.complete, lifecycleOwner) {
+        if (reveal == null || reveal.complete) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (vm.ui.value.reveal?.let { it.token == reveal.token && !it.complete } == true) {
+                delay(reveal.plan.tickMs)
+                vm.advanceReveal(reveal.token)
+            }
+        }
+    }
 
     val voiceLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -164,19 +204,19 @@ fun ChatScreen(
     DisposableEffect(ttsHelper, vm) {
         ttsHelper.listener = object : TtsProgressListener {
             override fun onStart(utteranceId: String) {
-                vm.onSpeechStarted(utteranceId)
+                callbackScope.launch { vm.onSpeechStarted(utteranceId) }
             }
 
             override fun onDone(utteranceId: String) {
-                vm.onSpeechCompleted(utteranceId)
+                callbackScope.launch { vm.onSpeechCompleted(utteranceId) }
             }
 
             override fun onError(utteranceId: String, errorCode: Int?) {
-                vm.onSpeechError(utteranceId)
+                callbackScope.launch { vm.onSpeechError(utteranceId) }
             }
 
             override fun onStop(utteranceId: String, interrupted: Boolean) {
-                vm.onSpeechStopped(utteranceId)
+                callbackScope.launch { vm.onSpeechStopped(utteranceId) }
             }
         }
         onDispose {
@@ -195,7 +235,7 @@ fun ChatScreen(
 
     LaunchedEffect(vm, speechSettings) {
         vm.speechEvents.collect { event ->
-            if (speechSettings.enabled && event.text.isNotBlank()) {
+            if (vm.coordinator.activeUtteranceId == event.utteranceId && event.text.isNotBlank()) {
                 ttsHelper.speak(
                     text = event.text,
                     rate = speechSettings.speechRate,
@@ -274,7 +314,8 @@ fun ChatScreen(
                         .fillMaxWidth()
                         .height(CharacterDisplayHeight)
                         .align(Alignment.TopCenter),
-                    onOneShotFinished = vm::onCharacterAnimationFinished,
+                    restartKey = ui.playbackToken,
+                    onOneShotFinished = { vm.onCharacterAnimationFinished(ui.playbackToken) },
                 )
 
                 // Foreground chat panel (soft frosted gradient container, dynamic height based on IME)
@@ -330,13 +371,22 @@ fun ChatScreen(
                                 items(messages, key = { it.id }) { m ->
                                     val action = ui.activeActions[m.id]
                                     MessageBubble(
-                                        text = m.text,
+                                        text = visibleReplyText(m.id, m.text, ui.reveal),
                                         isUser = m.role == "user",
                                         fontSizeSp = displaySettings.fontSizeSp,
                                         lineHeightSp = displaySettings.lineHeightSp,
                                         action = action,
                                         onActionClick = onActionClick,
+                                        onSkip = if (ui.reveal?.let { it.messageId == m.id && !it.complete } == true)
+                                            ({ vm.skipReveal(m.id) }) else null,
                                     )
+                                    if (m.role == "assistant" && m.id == messages.lastOrNull { it.role == "assistant" }?.id && !ui.sending) {
+                                        val label = if (ui.speechActive) "Dừng đọc" else "Đọc lại"
+                                        TextButton(
+                                            onClick = { if (ui.speechActive) vm.stopReading() else vm.replay(m) },
+                                            modifier = Modifier.semantics { contentDescription = label },
+                                        ) { Text(label) }
+                                    }
                                 }
                                 if (pending != null) {
                                     item(key = "pending") {
@@ -424,6 +474,7 @@ private fun MessageBubble(
     lineHeightSp: Int = fontSizeSp + ChatDisplaySettings.LINE_HEIGHT_OFFSET_SP,
     action: AssistantActionDto? = null,
     onActionClick: ((AssistantActionDto) -> Unit)? = null,
+    onSkip: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -434,7 +485,10 @@ private fun MessageBubble(
             color = if (isUser) MaterialTheme.colorScheme.primary else Color.White,
             contentColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             shadowElevation = if (isUser) 0.dp else 2.dp,
-            modifier = Modifier.widthIn(max = 300.dp).alpha(if (dimmed) 0.6f else 1f),
+            modifier = Modifier.widthIn(max = 300.dp).alpha(if (dimmed) 0.6f else 1f)
+                .then(if (onSkip != null) Modifier.clickable(
+                    onClickLabel = "Hiện toàn bộ câu trả lời", onClick = onSkip,
+                ) else Modifier),
         ) {
             Text(
                 text = text,

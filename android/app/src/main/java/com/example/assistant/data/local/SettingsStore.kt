@@ -2,6 +2,8 @@ package com.example.assistant.data.local
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -17,6 +19,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.UUID
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
+
+/** Shared by DataStore and JVM persistence tests, including installations without this key. */
+internal object TypewriterPreference {
+    private val key = booleanPreferencesKey("typewriter_enabled")
+    fun read(preferences: Preferences): Boolean = preferences[key] ?: true
+    fun write(preferences: MutablePreferences, enabled: Boolean) { preferences[key] = enabled }
+}
 
 class SettingsStore(private val context: Context) {
     private val clientIdKey = stringPreferencesKey("client_id")
@@ -111,8 +120,13 @@ class SettingsStore(private val context: Context) {
         ChatDisplaySettings(
             fontSizeSp = ChatDisplaySettings.clampFontSize(
                 prefs[messageFontSizeKey] ?: ChatDisplaySettings.DEFAULT_FONT_SIZE_SP
-            )
+            ),
+            typewriterEnabled = TypewriterPreference.read(prefs),
         )
+    }
+
+    suspend fun setTypewriterEnabled(enabled: Boolean) {
+        context.dataStore.edit { TypewriterPreference.write(it, enabled) }
     }
 
     suspend fun setMessageFontSize(fontSizeSp: Int) {
