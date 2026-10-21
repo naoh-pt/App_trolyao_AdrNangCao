@@ -316,13 +316,15 @@ _MAP_EXACT_PATTERNS = [
     re.compile(r"^(?:xin\s+)?(?:hãy\s+)?tìm\s+đường\s+(?:đến|tới|về)\s+(.*?)$", re.IGNORECASE),
     # "bản đồ đến/tới ..."
     re.compile(r"^(?:xin\s+)?(?:hãy\s+)?bản\s+đồ\s+(?:đến|tới)\s+(.*?)$", re.IGNORECASE),
+    # "tìm [trên] bản đồ ..." (explicit command prefix, not a general map keyword)
+    re.compile(r"^(?:xin\s+)?(?:hãy\s+)?tìm\s+(?:trên\s+)?bản\s+đồ\s+(.*?)$", re.IGNORECASE),
 ]
 
 
 def _parse_map(raw_text: str, norm_text: str) -> Optional[ActionResult]:
     """Parse map search requests safely extracting query text without raw URIs."""
     # Check if this is an empty map command
-    if norm_text in ("mở bản đồ", "bản đồ", "tìm trên bản đồ", "chỉ đường", "tìm đường"):
+    if norm_text in ("mở bản đồ", "bản đồ", "tìm trên bản đồ", "tìm bản đồ", "chỉ đường", "tìm đường"):
         return ActionResult(
             reply="Bạn muốn tìm địa điểm nào trên bản đồ nè? Hãy nói cho mình biết tên địa điểm nhé!",
             emotion="happy",
@@ -330,8 +332,10 @@ def _parse_map(raw_text: str, norm_text: str) -> Optional[ActionResult]:
         )
 
     query: Optional[str] = None
+    # Map-only cleanup: preserve casing/internal punctuation and timer/calendar parsing.
+    map_text = re.sub(r"[\s.,?!;:]+$", "", raw_text)
     for pattern in _MAP_EXACT_PATTERNS:
-        m = pattern.match(raw_text.strip())
+        m = pattern.match(map_text)
         if m:
             query = m.group(1).strip()
             break
@@ -339,15 +343,18 @@ def _parse_map(raw_text: str, norm_text: str) -> Optional[ActionResult]:
     if not query:
         return None
 
-    # Strip dangerous URI schemes
-    if re.search(r"^(?:https?://|geo:|file:|content:)", query, re.IGNORECASE):
+    cleaned_query = re.sub(r"[\s.,?!;:]+$", "", re.sub(r"\s+", " ", query).strip())
+
+    # Accept a place name, never a raw URI scheme or Android package identifier.
+    if re.search(r"^[a-z][a-z0-9+.-]*:", cleaned_query, re.IGNORECASE) or re.fullmatch(
+        r"(?:[a-z][a-z0-9_]*\.){2,}[a-z][a-z0-9_]*", cleaned_query, re.IGNORECASE
+    ):
         return ActionResult(
             reply="Bạn hãy nhập tên địa điểm bằng chữ thay vì đường dẫn nhé!",
             emotion="happy",
             action=None,
         )
 
-    cleaned_query = _clean_extracted_text(query)
     if not cleaned_query:
         return ActionResult(
             reply="Bạn muốn tìm địa điểm nào trên bản đồ nè? Hãy nói cho mình biết tên địa điểm nhé!",
