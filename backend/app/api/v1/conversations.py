@@ -34,12 +34,22 @@ from app.services.rag_service import prompt_context, retrieve
 from app.exceptions import RAGUnavailableException, is_quota_exhausted_exception
 from app.services.request_guard import own_request
 from app.services.quick_reply_service import get_quick_reply
+from app.services.weather.service import get_weather_reply
+from app.services.weather.intent import parse_weather_intent
 from app.services.assistant_action_service import recognize_action
 from app.services.personality import ANNA_QUOTA_FALLBACK_TEXT, ANNA_QUOTA_FALLBACK_EMOTION
 from app.utils.time import utc_now_iso
 
 router = APIRouter(tags=["Conversations"])
 VALID_EMOTIONS = {"neutral", "happy", "sad", "surprised"}
+
+
+def _validated_reply(text, emotion):
+    if not isinstance(text, str) or not text.strip():
+        raise InvalidAIReplyException()
+    if not isinstance(emotion, str) or emotion not in VALID_EMOTIONS:
+        emotion = "neutral"
+    return text.strip(), emotion
 
 
 @router.post(
@@ -294,6 +304,7 @@ def send_message(
         action_now = datetime.now(timezone.utc)
         action_match = recognize_action(normalized_msg, now=action_now)
         proposed_action = None
+        weather_intent = None
         if action_match is not None:
             reply_text, reply_emotion = action_match.reply, action_match.emotion
             if action_match.action is not None:
@@ -304,6 +315,9 @@ def send_message(
             quick_reply = get_quick_reply(normalized_msg)
             if quick_reply is not None:
                 reply_text, reply_emotion = quick_reply
+                retrieved = []
+            elif (weather_intent := parse_weather_intent(normalized_msg)) is not None:
+                # Execute after the user INSERT, inside the existing atomic write below.
                 retrieved = []
             else:
                 rows = db.execute(
@@ -346,11 +360,8 @@ def send_message(
                 if not isinstance(result, (tuple, list)) or len(result) != 2:
                     raise InvalidAIReplyException()
                 reply_text, reply_emotion = result
-        if not isinstance(reply_text, str) or not reply_text.strip():
-            raise InvalidAIReplyException()
-        reply_text = reply_text.strip()
-        if not isinstance(reply_emotion, str) or reply_emotion not in VALID_EMOTIONS:
-            reply_emotion = "neutral"
+        if weather_intent is None:
+            reply_text, reply_emotion = _validated_reply(reply_text, reply_emotion)
 
         user_msg_id = str(uuid.uuid4())
         asst_msg_id = str(uuid.uuid4())
@@ -371,6 +382,9 @@ def send_message(
                        VALUES (?, ?, ?, ?, ?, ?)""",
                     (user_msg_id, conv_id, "user", normalized_msg, None, now_ts),
                 )
+                if weather_intent is not None:
+                    # Same transaction commits both messages and replay record, or none.
+                    reply_text, reply_emotion = _validated_reply(*get_weather_reply(normalized_msg, request_id=req_id))
                 db.execute(
                     """INSERT INTO messages (id, conversation_id, role, text, emotion, created_at)
                        VALUES (?, ?, ?, ?, ?, ?)""",

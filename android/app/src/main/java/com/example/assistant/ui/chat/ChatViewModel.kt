@@ -15,6 +15,9 @@ import com.example.assistant.data.repo.ChatRepository
 import com.example.assistant.domain.AnimationFpsSettings
 import com.example.assistant.domain.CharacterState
 import com.example.assistant.domain.Emotion
+import com.example.assistant.ui.demo.DemoCommand
+import com.example.assistant.ui.demo.DemoState
+import com.example.assistant.ui.demo.reduceDemo
 import com.example.assistant.ui.character.animationSpecFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -63,6 +66,7 @@ data class ChatUiState(
     val characterState: CharacterState = CharacterState.IDLE,
     val emotion: Emotion = Emotion.NEUTRAL,
     val input: String = "",
+    val demo: DemoState = DemoState(),
     val reveal: ReplyReveal? = null,
     val playbackToken: String? = null,
     val speechActive: Boolean = false,
@@ -368,6 +372,10 @@ class ChatViewModel(
 
     fun onInputChange(text: String) {
         _ui.update { s -> s.copy(input = text.take(MAX_LEN)) }
+    }
+
+    fun onDemoCommand(command: DemoCommand) {
+        _ui.update { it.reduceDemo(command) }
     }
 
     /**

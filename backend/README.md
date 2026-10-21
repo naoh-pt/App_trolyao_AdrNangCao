@@ -289,6 +289,42 @@ Khi phát triển với chế độ tự động tải lại (reload):
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+## Thời tiết trực tiếp: Open-Meteo (Stage 14B)
+
+Backend dùng công cụ xác định, không dùng Gemini/Groq/RAG để lấy hoặc diễn đạt dữ liệu thời tiết. Không cần API key hay GPS. Laptop chạy backend cần Internet ra ngoài tới hai host HTTPS cố định: `geocoding-api.open-meteo.com` và `api.open-meteo.com`. Không có URL cấu hình tùy ý, không theo redirect, không retry. Khởi động lại backend sau khi đổi cấu hình.
+
+Các câu mẫu:
+
+- `Thời tiết Hà Nội hiện tại thế nào?`
+- `Thời tiết Hà Nội hôm nay thế nào?`
+- `Ngày mai Hà Nội có mưa không?`
+- `Nhiệt độ ở Bắc Ninh hôm nay bao nhiêu?`
+- `Hôm nay mình có nên mang áo mưa ở Hà Nội không?`
+
+Hỗ trợ `hiện tại`, `hôm nay`, `ngày mai`, `ngày kia`. Thiếu địa điểm thì Anna hỏi lại, không chọn vị trí IP hoặc mặc định Hà Nội. Với địa điểm nước ngoài nên ghi rõ quốc gia sau dấu phẩy, ví dụ `Thời tiết Paris, France ngày mai thế nào?`. Chỉ dùng tên được gõ trong câu, không lấy vị trí điện thoại. Lỗi mạng hoặc thiếu dữ liệu trả lời thân thiện, không nhờ AI đoán thời tiết. Mỗi kết quả thành công có `Nguồn dữ liệu: Open-Meteo.`; `sources` vẫn là mảng rỗng vì schema nguồn hiện tại dành cho tài liệu RAG.
+
+Các giá trị mặc định (có trong `.env.example`, không cần sửa file `.env` hiện tại để bật tính năng):
+
+```env
+WEATHER_ENABLED=true
+WEATHER_CONNECT_TIMEOUT_MS=3000
+WEATHER_READ_TIMEOUT_MS=6000
+WEATHER_CACHE_TTL_SECONDS=600
+WEATHER_GEOCODING_CACHE_TTL_SECONDS=86400
+```
+
+Timeout độc lập với ngân sách AI: connect tối đa 3 giây, read/write/pool tối đa 6 giây mỗi request HTTP; một câu hỏi chưa cache cần tối đa hai request tuần tự. Không có retry. Đây là timeout I/O của HTTPX, không phải deadline tuyệt đối cho toàn bộ câu hỏi. Cache trong RAM: địa điểm 24 giờ, dự báo 10 phút, tối đa 256 mục mỗi cache, mất khi khởi động lại. Giá trị số không hợp lệ/không dương/vượt giới hạn dùng mặc định an toàn; giới hạn cấu hình: connect 3000 ms, read 6000 ms, dự báo 3600 giây, địa điểm 86400 giây. Dùng `WEATHER_ENABLED=false` để tạm tắt; câu hỏi thời tiết vẫn không được gửi sang AI.
+
+Ngày dự báo được tính trong timezone Open-Meteo trả về; dữ liệu hiện tại quá 2 giờ bị từ chối. Dự báo có thể thay đổi, cache có thể chậm tối đa 10 phút, lời khuyên mang áo mưa không bảo đảm chắc chắn có/không mưa. Công cụ này dành cho demo một worker, không phải dịch vụ cảnh báo thời tiết khẩn cấp.
+
+Kiểm thử offline:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests/test_weather.py
+```
+
+Tài liệu gốc: [Forecast API](https://open-meteo.com/en/docs), [Geocoding API](https://open-meteo.com/en/docs/geocoding-api). Kiểm thử tự động dùng HTTP MockTransport, không gọi mạng thật.
+
 ## RAG: Sổ tay sinh viên
 
 RAG dùng Chroma local để lưu các chunks/vector embedding và SQLite để lưu metadata tài liệu cùng nguồn đã dùng trong mỗi câu trả lời. Khi không có đoạn sổ tay nào đủ liên quan, chat tự động dùng Gemini bình thường.
