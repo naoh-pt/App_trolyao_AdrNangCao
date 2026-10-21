@@ -348,7 +348,7 @@ class Stage11AssistantActionsAndEmotionTest {
     fun testNoActionLaunchedAutomatically() {
         // Parsing DTOs produces pure immutable data models without executing any system Intents
         val timerDto = AssistantActionDto(type = "set_timer", durationSeconds = 60)
-        val calDto = AssistantActionDto(type = "create_calendar_event", startAt = "2026-10-10T10:00:00+07:00")
+        val calDto = AssistantActionDto(type = "create_calendar_event", title = "Học Android", startAt = "2026-10-10T10:00:00+07:00")
         val mapDto = AssistantActionDto(type = "map_search", query = "Hà Nội")
 
         val timerPayload = parseActionPayload(timerDto)

@@ -1,12 +1,12 @@
 package com.example.assistant.ui.chat
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.AlarmClock
 import android.provider.CalendarContract
+import android.util.Log
 import com.example.assistant.data.remote.AssistantActionDto
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -43,12 +43,24 @@ fun formatUtcCalendarDate(epochMillis: Long): String {
 
 /** Builds the safe geo: URI for map searches. */
 fun buildMapGeoUri(query: String): String {
-    return "geo:0,0?q=${encodeUriComponent(query)}"
+    return "geo:0,0?q=${encodeUriComponent(requireNotNull(cleanMapQuery(query)))}"
 }
 
 /** Builds the safe Google Maps HTTPS web search URL for map searches. */
 fun buildMapWebSearchUrl(query: String): String {
-    return "$MAP_WEB_SEARCH_BASE_URL${encodeUriComponent(query)}"
+    return "$MAP_WEB_SEARCH_BASE_URL${encodeUriComponent(requireNotNull(cleanMapQuery(query)))}"
+}
+
+/** Plain location text only; never accept a backend URI as a launch destination. */
+fun cleanMapQuery(query: String?): String? {
+    var cleaned = query?.trim() ?: return null
+    if (Regex("(?i)^(?:[a-z][a-z0-9+.-]*://|(?:javascript|file|intent|content|data|geo):)").containsMatchIn(cleaned)) return null
+    cleaned = cleaned.trimEnd { it.isWhitespace() || it in ",?!;:" }
+    // Preserve meaningful final initialisms such as D.C.; remove conversational periods otherwise.
+    if (!Regex("(?:\\p{L}\\.){2,}$").containsMatchIn(cleaned)) {
+        cleaned = cleaned.trimEnd { it.isWhitespace() || it in ".,?!;:" }
+    }
+    return cleaned.takeIf { it.isNotBlank() }
 }
 
 /** Builds the fallback Intent for web browser map search. */
@@ -81,6 +93,7 @@ fun buildCalendarWebFallbackIntent(
 }
 
 /**
+ * Prepares a caller-owned Intent. Candidate materialization always creates a fresh Intent.
  * Ensures [intent] has [Intent.FLAG_ACTIVITY_NEW_TASK] if [context] is not an [Activity].
  * Does not add the flag unnecessarily when an [Activity] context is available.
  */
@@ -140,9 +153,11 @@ fun parseActionPayload(dto: AssistantActionDto): AssistantActionPayload? = when 
 
     AssistantActionTypes.CREATE_CALENDAR_EVENT -> {
         val startMillis = parseIsoTimestampToMillis(dto.startAt)
-        if (startMillis != null) {
-            val endMillis = parseIsoTimestampToMillis(dto.endAt) ?: (startMillis + 30 * 60 * 1000L)
-            val title = if (!dto.title.isNullOrBlank()) dto.title.trim() else "Sự kiện mới"
+        val title = dto.title?.trim()
+        val endMillis = if (dto.endAt == null && startMillis != null) {
+            runCatching { Math.addExact(startMillis, 30 * 60 * 1000L) }.getOrNull()
+        } else parseIsoTimestampToMillis(dto.endAt)
+        if (startMillis != null && endMillis != null && endMillis > startMillis && !title.isNullOrBlank()) {
             AssistantActionPayload.CreateCalendarEvent(
                 title = title,
                 startMillis = startMillis,
@@ -154,7 +169,7 @@ fun parseActionPayload(dto: AssistantActionDto): AssistantActionPayload? = when 
     }
 
     AssistantActionTypes.MAP_SEARCH -> {
-        val q = dto.query?.trim()
+        val q = cleanMapQuery(dto.query)
         if (!q.isNullOrBlank()) {
             AssistantActionPayload.MapSearch(query = q)
         } else {
@@ -165,33 +180,72 @@ fun parseActionPayload(dto: AssistantActionDto): AssistantActionPayload? = when 
     else -> null
 }
 
-/**
- * Pure function building the primary Android [Intent] for a validated [AssistantActionPayload].
- * Uses strictly hardcoded safe intents and never launches arbitrary packages or URIs.
- */
-fun buildActionIntent(payload: AssistantActionPayload): Intent = when (payload) {
-    is AssistantActionPayload.SetTimer -> {
-        Intent(AlarmClock.ACTION_SET_TIMER).apply {
-            putExtra(AlarmClock.EXTRA_MESSAGE, payload.message)
-            putExtra(AlarmClock.EXTRA_LENGTH, payload.durationSeconds)
-            putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+/** Immutable description of an allowlisted Intent; also usable without Android framework stubs. */
+data class ActionIntentCandidate(
+    val action: String,
+    val dataUri: String? = null,
+    val extras: Map<String, Any> = emptyMap(),
+    val flags: Int = 0,
+) {
+    /** Each dispatch gets a new framework object; shared candidates are never mutated. */
+    internal fun toIntent(createIntent: (String) -> Intent = { Intent(it) }): Intent = createIntent(action).apply {
+        dataUri?.let { data = if (it == CALENDAR_EVENTS_URI) CalendarContract.Events.CONTENT_URI else Uri.parse(it) }
+        this@ActionIntentCandidate.extras.forEach { (key, value) ->
+            when (value) {
+                is String -> putExtra(key, value)
+                is Long -> putExtra(key, value)
+                is Int -> putExtra(key, value)
+                is Boolean -> putExtra(key, value)
+            }
         }
+        addFlags(this@ActionIntentCandidate.flags)
     }
+}
+
+internal const val CALENDAR_EVENTS_URI = "content://com.android.calendar/events"
+
+/** Only fixed platform actions/URI roots and typed, validated extras are constructed. */
+fun buildActionCandidates(payload: AssistantActionPayload): List<ActionIntentCandidate> = when (payload) {
+    is AssistantActionPayload.SetTimer -> if (payload.durationSeconds > 0) listOf(
+        ActionIntentCandidate(AlarmClock.ACTION_SET_TIMER, extras = mapOf(
+            AlarmClock.EXTRA_MESSAGE to payload.message,
+            AlarmClock.EXTRA_LENGTH to payload.durationSeconds,
+            AlarmClock.EXTRA_SKIP_UI to true,
+        )),
+    ) else emptyList()
 
     is AssistantActionPayload.CreateCalendarEvent -> {
-        Intent(Intent.ACTION_INSERT).apply {
-            data = CalendarContract.Events.CONTENT_URI
-            putExtra(CalendarContract.Events.TITLE, payload.title)
-            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, payload.startMillis)
-            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, payload.endMillis)
-            putExtra(CalendarContract.Events.DESCRIPTION, CALENDAR_DEFAULT_DESCRIPTION)
+        if (payload.title.isBlank() || payload.endMillis <= payload.startMillis) emptyList() else {
+            val extras = mapOf(
+                CalendarContract.Events.TITLE to payload.title.trim(),
+                CalendarContract.EXTRA_EVENT_BEGIN_TIME to payload.startMillis,
+                CalendarContract.EXTRA_EVENT_END_TIME to payload.endMillis,
+                CalendarContract.Events.DESCRIPTION to CALENDAR_DEFAULT_DESCRIPTION,
+            )
+            listOf(
+                ActionIntentCandidate(Intent.ACTION_INSERT, CALENDAR_EVENTS_URI, extras),
+                ActionIntentCandidate(Intent.ACTION_EDIT, CALENDAR_EVENTS_URI, extras),
+                // Opens a calendar date, never writes/saves an event or guesses an event ID.
+                ActionIntentCandidate(Intent.ACTION_VIEW,
+                    "content://com.android.calendar/time/${payload.startMillis}", extras),
+            )
         }
     }
 
     is AssistantActionPayload.MapSearch -> {
-        Intent(Intent.ACTION_VIEW, Uri.parse(buildMapGeoUri(payload.query)))
+        val query = cleanMapQuery(payload.query)
+        if (query == null) emptyList() else listOf(
+            ActionIntentCandidate(Intent.ACTION_VIEW, buildMapGeoUri(query)),
+            ActionIntentCandidate(Intent.ACTION_VIEW, buildMapWebSearchUrl(query)),
+        )
     }
 }
+
+fun buildActionIntents(payload: AssistantActionPayload): List<Intent> =
+    buildActionCandidates(payload).map { it.toIntent() }
+
+/** Compatibility entrypoint for callers needing only the primary candidate. */
+fun buildActionIntent(payload: AssistantActionPayload): Intent = buildActionIntents(payload).first()
 
 /**
  * Returns user-facing label text for an assistant action button.
@@ -206,114 +260,38 @@ fun actionButtonLabel(dto: AssistantActionDto): String {
     }
 }
 
+internal fun actionLaunchError(type: String): String = when (type) {
+    AssistantActionTypes.SET_TIMER -> "Không tìm thấy ứng dụng hẹn giờ phù hợp trên thiết bị."
+    AssistantActionTypes.CREATE_CALENDAR_EVENT -> "Không thể mở ứng dụng lịch trên thiết bị."
+    AssistantActionTypes.MAP_SEARCH -> "Không thể mở ứng dụng bản đồ hoặc trình duyệt trên thiết bị."
+    else -> "Hành động không hợp lệ hoặc dữ liệu bị thiếu."
+}
+
 /**
- * Safely launches the Android system activity associated with [dto].
- * Returns true if an intent was dispatched, false if unsupported or no compatible app was found.
- * Never crashes; invokes [onError] with a friendly Vietnamese message on failure.
- *
- * Fallback behavior:
- * - MapSearch: tries primary "geo:" intent; on ActivityNotFoundException, falls back to Google Maps web URL.
- * - CreateCalendarEvent: tries primary Calendar ACTION_INSERT intent; on ActivityNotFoundException, falls back to Google Calendar web template URL.
- * - SetTimer: tries Clock ACTION_SET_TIMER.
- * All intents are passed through [prepareForContext] to guarantee safe execution regardless of Context type.
+ * Parse once, then try the allowlisted candidates in order. The injected launcher observes the
+ * exact immutable candidate used by production; it enables JVM tests without fake Android Intents.
+ * No preflight resolveActivity: package visibility must not prevent an otherwise valid dispatch.
  */
 fun launchActionSafely(
     context: Context,
     dto: AssistantActionDto,
     onError: (String) -> Unit = {},
+    launchCandidate: (ActionIntentCandidate) -> Unit = { context.startActivity(it.toIntent()) },
 ): Boolean {
     val payload = parseActionPayload(dto)
-    if (payload == null) {
-        onError("Hành động không hợp lệ hoặc dữ liệu bị thiếu.")
-        return false
-    }
-
-    return when (payload) {
-        is AssistantActionPayload.SetTimer -> {
-            val intent = try {
-                prepareForContext(context, buildActionIntent(payload))
-            } catch (e: Exception) {
-                onError("Không thể tạo tác vụ: ${e.message}")
-                return false
-            }
-            try {
-                context.startActivity(intent)
-                true
-            } catch (e: ActivityNotFoundException) {
-                onError("Không tìm thấy ứng dụng hẹn giờ trên thiết bị.")
-                false
-            } catch (e: Exception) {
-                onError("Không thể thực hiện tác vụ: ${e.message}")
-                false
-            }
-        }
-
-        is AssistantActionPayload.MapSearch -> {
-            val primaryIntent = try {
-                prepareForContext(context, buildActionIntent(payload))
-            } catch (e: Exception) {
-                onError("Không thể tạo tác vụ: ${e.message}")
-                return false
-            }
-            try {
-                context.startActivity(primaryIntent)
-                true
-            } catch (e: ActivityNotFoundException) {
-                // Primary geo: intent failed, try safe browser fallback
-                try {
-                    val fallbackIntent = prepareForContext(
-                        context,
-                        buildMapWebFallbackIntent(payload.query),
-                    )
-                    context.startActivity(fallbackIntent)
-                    true
-                } catch (fallbackEx: ActivityNotFoundException) {
-                    onError("Không tìm thấy ứng dụng bản đồ trên thiết bị.")
-                    false
-                } catch (fallbackEx: Exception) {
-                    onError("Không thể mở bản đồ: ${fallbackEx.message}")
-                    false
-                }
-            } catch (e: Exception) {
-                onError("Không thể thực hiện tác vụ: ${e.message}")
-                false
-            }
-        }
-
-        is AssistantActionPayload.CreateCalendarEvent -> {
-            val primaryIntent = try {
-                prepareForContext(context, buildActionIntent(payload))
-            } catch (e: Exception) {
-                onError("Không thể tạo tác vụ: ${e.message}")
-                return false
-            }
-            try {
-                context.startActivity(primaryIntent)
-                true
-            } catch (e: ActivityNotFoundException) {
-                // Primary Calendar ACTION_INSERT failed, try safe Google Calendar web template fallback
-                try {
-                    val fallbackIntent = prepareForContext(
-                        context,
-                        buildCalendarWebFallbackIntent(
-                            title = payload.title,
-                            startMillis = payload.startMillis,
-                            endMillis = payload.endMillis,
-                        ),
-                    )
-                    context.startActivity(fallbackIntent)
-                    true
-                } catch (fallbackEx: ActivityNotFoundException) {
-                    onError("Không tìm thấy ứng dụng lịch trên thiết bị.")
-                    false
-                } catch (fallbackEx: Exception) {
-                    onError("Không thể mở lịch: ${fallbackEx.message}")
-                    false
-                }
-            } catch (e: Exception) {
-                onError("Không thể thực hiện tác vụ: ${e.message}")
-                false
-            }
+    val candidates = payload?.let(::buildActionCandidates).orEmpty()
+    for ((index, candidate) in candidates.withIndex()) {
+        val prepared = candidate.copy(flags = candidate.flags or
+            if (context is Activity) 0 else Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            launchCandidate(prepared)
+            return true
+        } catch (exception: RuntimeException) {
+            // Includes ActivityNotFoundException, SecurityException and framework Context failures.
+            // Do not log exception messages, payload content, URI, title, or map query.
+            Log.w("AssistantActions", "action=${dto.type} candidate=${index + 1} exception=${exception.javaClass.simpleName}")
         }
     }
+    onError(actionLaunchError(dto.type))
+    return false
 }

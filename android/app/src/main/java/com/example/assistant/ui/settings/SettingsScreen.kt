@@ -112,7 +112,21 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
 
                 // Section 2.5: Chat Display Settings (Message Font Size)
                 item {
-                    ChatDisplaySettingsSection(ui = ui, vm = vm)
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text("Hiệu ứng hiện chữ dần", modifier = Modifier.weight(1f))
+                            Switch(
+                                checked = ui.chatDisplaySettings.typewriterEnabled,
+                                onCheckedChange = vm::setTypewriterEnabled,
+                                modifier = Modifier.semantics { contentDescription = "Hiệu ứng hiện chữ dần" },
+                            )
+                        }
+                        ChatDisplaySettingsSection(ui = ui, vm = vm)
+                    }
                 }
 
                 // Section 3: Character Animation Settings & Preview
