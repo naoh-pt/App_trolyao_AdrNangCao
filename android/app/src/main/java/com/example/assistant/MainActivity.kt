@@ -29,12 +29,18 @@ import com.example.assistant.ui.history.HistoryViewModel
 import com.example.assistant.ui.home.HomeScreen
 import com.example.assistant.ui.settings.SettingsScreen
 import com.example.assistant.ui.settings.SettingsViewModel
+import com.example.assistant.ui.memory.MemoryScreen
+import com.example.assistant.ui.memory.MemoryViewModel
+import com.example.assistant.ui.companion.CompanionSettingsScreen
+import com.example.assistant.ui.companion.CompanionViewModel
 import com.example.assistant.ui.theme.AssistantTheme
 
 object Routes {
     const val HOME = "home"
     const val HISTORY = "history"
     const val SETTINGS = "settings"
+    const val MEMORY = "memory"
+    const val COMPANION = "companion"
     const val CHAT = "chat/{id}"
     const val NEW = "new" // "chat mới": ChatViewModel tự tạo conversation_id trên server
     fun chat(id: String) = "chat/$id"
@@ -103,7 +109,15 @@ fun AppNav() {
         }
         composable(Routes.SETTINGS) {
             val vm: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
-            SettingsScreen(vm = vm, onBack = { nav.popBackStack() })
+            SettingsScreen(vm = vm, onBack = { nav.popBackStack() }, onMemory = { nav.navigate(Routes.MEMORY) }, onCompanion = { nav.navigate(Routes.COMPANION) })
+        }
+        composable(Routes.MEMORY) {
+            val vm: MemoryViewModel = viewModel(factory = MemoryViewModel.Factory)
+            MemoryScreen(vm = vm, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.COMPANION) {
+            val vm: CompanionViewModel = viewModel(factory = CompanionViewModel.Factory)
+            CompanionSettingsScreen(vm, onBack = { nav.popBackStack() })
         }
     }
 }

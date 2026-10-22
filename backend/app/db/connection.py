@@ -66,6 +66,53 @@ def init_db(db_path: Optional[str] = None) -> None:
             CREATE INDEX IF NOT EXISTS idx_idempotency_lookup
                 ON idempotency_records(client_id, conversation_id, request_id);
 
+            CREATE TABLE IF NOT EXISTS pending_actions (
+                client_id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                intent TEXT NOT NULL CHECK(intent = 'create_calendar_event'),
+                slots_json TEXT NOT NULL CHECK(length(slots_json) <= 2000),
+                missing_slots_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                PRIMARY KEY(client_id, conversation_id),
+                FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS message_action_snapshots (
+                assistant_message_id TEXT PRIMARY KEY,
+                action_json TEXT NOT NULL,
+                FOREIGN KEY(assistant_message_id) REFERENCES messages(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS personal_memories (
+                id TEXT PRIMARY KEY,
+                client_id TEXT NOT NULL,
+                kind TEXT NOT NULL CHECK(kind IN ('profile','preference','general','event')),
+                content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 300),
+                normalized_content TEXT NOT NULL,
+                event_date TEXT,
+                remind_on TEXT,
+                reminded_at TEXT,
+                expires_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(client_id, normalized_content)
+            );
+            CREATE INDEX IF NOT EXISTS idx_memories_owner ON personal_memories(client_id, created_at, id);
+            CREATE INDEX IF NOT EXISTS idx_memories_due ON personal_memories(client_id, reminded_at, remind_on);
+
+            CREATE TABLE IF NOT EXISTS companion_preferences (
+                client_id TEXT PRIMARY KEY,
+                preferred_name TEXT,
+                address_style TEXT NOT NULL DEFAULT 'anna_ban',
+                humor_level TEXT NOT NULL DEFAULT 'medium',
+                response_length TEXT NOT NULL DEFAULT 'medium',
+                support_style TEXT NOT NULL DEFAULT 'balanced',
+                mood_check_in_enabled INTEGER NOT NULL DEFAULT 1 CHECK(mood_check_in_enabled IN (0,1)),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS knowledge_documents (
                 id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,

@@ -2,6 +2,7 @@
 
 import sqlite3
 import os
+import socket
 from typing import Generator
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +17,20 @@ from app.db.connection import get_connection, get_db, init_db
 from app.main import app
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
+def offline_network(monkeypatch):
+    """Fail closed if a fake accidentally attempts a real external connection."""
+    original = socket.socket.connect
+
+    def connect(sock, address):
+        if isinstance(address, tuple) and address[0] not in {"127.0.0.1", "::1", "localhost"}:
+            raise AssertionError("External network is forbidden in automated tests")
+        return original(sock, address)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+
+
+@pytest.fixture(autouse=True)
 def temp_db_file(tmp_path, monkeypatch):
     """Provide a path to a temporary SQLite database file and isolate configuration."""
     db_file = str(tmp_path / "test_isolated.db")

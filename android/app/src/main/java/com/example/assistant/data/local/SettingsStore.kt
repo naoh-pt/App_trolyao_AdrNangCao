@@ -27,7 +27,23 @@ internal object TypewriterPreference {
     fun write(preferences: MutablePreferences, enabled: Boolean) { preferences[key] = enabled }
 }
 
+/** Only a shown-date marker per existing client; no mood values/history are stored. */
+internal object MoodShownPreference {
+    fun claim(preferences: MutablePreferences, owner: String, date: String): Boolean {
+        val key = stringPreferencesKey("mood_shown_date_$owner")
+        if (preferences[key] == date) return false
+        preferences[key] = date
+        return true
+    }
+}
+
 class SettingsStore(private val context: Context) {
+    suspend fun claimMoodDate(owner: String, date: String): Boolean {
+        if (clientId() != owner) return false
+        var claimed = false
+        context.dataStore.edit { claimed = MoodShownPreference.claim(it, owner, date) }
+        return claimed
+    }
     private val clientIdKey = stringPreferencesKey("client_id")
     private val baseUrlKey = stringPreferencesKey("base_url")
 

@@ -2,7 +2,7 @@ package com.example.assistant.ui.demo
 
 enum class DemoCategory(val title: String, val enabled: Boolean = true) {
     Conversation("Trò chuyện"), Time("Thời gian"), Study("Học tập & RAG"),
-    Emotion("Cảm xúc"), Utilities("Tiện ích"), Weather("Thời tiết"),
+    Emotion("Cảm xúc"), Utilities("Tiện ích"), Weather("Thời tiết"), Memory("Trí nhớ"),
 }
 
 data class DemoQuestion(
@@ -43,6 +43,8 @@ object DemoQuestionCatalog {
         DemoQuestion("emotion_sad", "Khi mất động lực", "Hôm nay mình hơi buồn và mất động lực học.", DemoCategory.Emotion, requiresAi = true, requiresInternet = true),
         DemoQuestion("emotion_surprised", "Tin bất ngờ", "Anna ơi, mình vừa nhận được học bổng bất ngờ!", DemoCategory.Emotion, requiresAi = true, requiresInternet = true),
         DemoQuestion("emotion_stressed", "Trước buổi báo cáo", "Mình đang khá căng thẳng vì sắp phải báo cáo.", DemoCategory.Emotion, requiresAi = true, requiresInternet = true),
+        DemoQuestion("emotion_disappointed", "Khi bị điểm thấp", "Hôm nay mình bị điểm thấp và cảm thấy thất vọng.", DemoCategory.Emotion, requiresAi = true, requiresInternet = true),
+        DemoQuestion("emotion_listen", "Chỉ muốn được lắng nghe", "Anna ơi, lúc này mình chỉ muốn được lắng nghe thôi.", DemoCategory.Emotion, requiresAi = true, requiresInternet = true),
         DemoQuestion("utility_timer", "Hẹn giờ 5 phút", "Nhắc tôi học bài sau 5 phút", DemoCategory.Utilities),
         DemoQuestion("utility_calendar", "Lịch học ngày mai", "Tạo lịch học Android lúc 8 giờ tối ngày mai", DemoCategory.Utilities),
         DemoQuestion("utility_weekday", "Họp thứ Hai tuần sau", "Tạo lịch họp nhóm lúc 7 giờ tối thứ 2 tuần sau", DemoCategory.Utilities),
@@ -52,13 +54,18 @@ object DemoQuestionCatalog {
         DemoQuestion("weather_rain", "Dự báo mưa", "Ngày mai Hà Nội có mưa không?", DemoCategory.Weather, requiresInternet = true),
         DemoQuestion("weather_temperature", "Nhiệt độ Bắc Ninh", "Nhiệt độ ở Bắc Ninh hôm nay bao nhiêu?", DemoCategory.Weather, requiresInternet = true),
         DemoQuestion("weather_raincoat", "Có cần áo mưa?", "Hôm nay mình có nên mang áo mưa ở Hà Nội không?", DemoCategory.Weather, requiresInternet = true),
+        DemoQuestion("memory_name", "Lưu tên", "Anna hãy nhớ: mình tên là Hoàn.", DemoCategory.Memory),
+        DemoQuestion("memory_preference", "Lưu sở thích", "Anna hãy nhớ: mình thích học Android.", DemoCategory.Memory),
+        DemoQuestion("memory_list", "Xem trí nhớ", "Anna nhớ gì về mình?", DemoCategory.Memory),
+        DemoQuestion("memory_event", "Nhắc khi vào trò chuyện", "Anna hãy nhớ: mình thi Android vào thứ Sáu tuần sau. Nhắc mình khi mở ứng dụng từ hôm nay.", DemoCategory.Memory),
+        DemoQuestion("memory_forget", "Quên sở thích", "Anna hãy quên việc mình thích học Android.", DemoCategory.Memory),
     )
 
     val scenarios: List<DemoScenario> = listOf(
         DemoScenario("quick", "Demo nhanh 3 phút", "Chào hỏi, giờ hiện tại và hai tiện ích quen thuộc.",
             listOf("chat_greeting", "time_now", "utility_timer", "utility_map_kma")),
         DemoScenario("full", "Demo đầy đủ", "Trò chuyện, RAG, cảm xúc và các tiện ích. Cần nạp tài liệu RAG.",
-            listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma", "weather_now")),
+            listOf("chat_greeting", "chat_help", "time_now", "study_tuition", "emotion_sad", "utility_timer", "utility_calendar", "utility_map_kma", "weather_now", "memory_name", "memory_list", "emotion_disappointed")),
         DemoScenario("no_quota", "Demo không phụ thuộc quota", "Không cần quota AI; backend vẫn phải chạy",
             listOf("chat_greeting", "time_now", "time_weekday", "utility_timer", "utility_calendar", "utility_map_lake")),
     )

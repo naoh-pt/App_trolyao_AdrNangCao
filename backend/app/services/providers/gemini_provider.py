@@ -14,6 +14,8 @@ from app.exceptions import (
     is_quota_exhausted_exception,
 )
 from app.services.personality import ANNA_SYSTEM_PROMPT, normalize_emotion
+from app.services.memory_context import provider_system_prompt
+from app.services.intent_proposal import GeneratedReply
 from app.services.providers.base import BaseProvider
 
 
@@ -81,9 +83,7 @@ class GeminiProvider(BaseProvider):
                 types.Content(role="user", parts=[types.Part.from_text(text=message)])
             )
 
-            system_instruction = (
-                f"{ANNA_SYSTEM_PROMPT}\n\n{rag_context}" if rag_context else ANNA_SYSTEM_PROMPT
-            )
+            system_instruction = provider_system_prompt(rag_context)
 
             response = client.models.generate_content(
                 model=self.model,
@@ -101,7 +101,7 @@ class GeminiProvider(BaseProvider):
                 raise LLMUnavailableException("LLM trả về câu trả lời rỗng hoặc không hợp lệ.")
 
             emotion = normalize_emotion(result_json.get("emotion"))
-            return reply.strip(), emotion
+            return GeneratedReply(reply.strip(), emotion, result_json.get("intent_proposal"))
 
         except json.JSONDecodeError:
             logging.error("[Gemini Provider Error] Malformed JSON response.")

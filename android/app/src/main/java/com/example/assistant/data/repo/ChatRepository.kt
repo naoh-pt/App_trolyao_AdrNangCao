@@ -11,6 +11,8 @@ import com.example.assistant.data.remote.ChatApi
 import com.example.assistant.data.remote.ConversationDto
 import com.example.assistant.data.remote.ErrorBody
 import com.example.assistant.data.remote.MessageDto
+import com.example.assistant.data.remote.MemoryDto
+import com.example.assistant.domain.CompanionPreferences
 import com.example.assistant.data.remote.SendMessageRequest
 import com.google.gson.Gson
 import com.google.gson.JsonParseException
@@ -34,13 +36,48 @@ class ChatRepository(
     private val db: AppDatabase,
     private val apiClient: ApiClient,
     private val settings: SettingsStore,
-) {
+) : MemoryGateway, CompanionGateway {
     private val convDao = db.conversationDao()
     private val msgDao = db.messageDao()
     private val gson = Gson()
 
     fun observeConversations(): Flow<List<ConversationEntity>> = convDao.observeAll()
     fun observeMessages(conversationId: String): Flow<List<MessageEntity>> = msgDao.observe(conversationId)
+
+    override suspend fun ownerId(): String = settings.clientId()
+
+    override suspend fun getCompanion(owner: String): Result<CompanionPreferences> = safe {
+        call { api, cid ->
+            check(cid == owner)
+            api.companion(cid)
+        }.also { check(it.valid()) }
+    }
+
+    override suspend fun saveCompanion(owner: String, preferences: CompanionPreferences): Result<CompanionPreferences> = safe {
+        check(preferences.valid())
+        call { api, cid ->
+            check(cid == owner)
+            api.saveCompanion(cid, preferences)
+        }.also { check(it.valid()) }
+    }
+
+    suspend fun claimMoodDate(owner: String, date: String): Boolean = settings.claimMoodDate(owner, date)
+
+    override suspend fun listMemories(): Result<List<MemoryDto>> = safe {
+        call { api, cid -> api.memories(cid) }.items
+    }
+
+    override suspend fun deleteMemory(id: String): Result<Unit> = safe {
+        call { api, cid -> api.deleteMemory(id, cid) }
+    }
+
+    suspend fun checkIn(id: String): Result<MessageDto?> = safe {
+        call { api, cid -> api.checkIn(id, cid) }.message
+    }
+
+    suspend fun cacheCheckIn(id: String, message: MessageDto) {
+        if (message.role == "assistant") msgDao.upsertAll(listOf(message.toEntity(id)))
+    }
 
     suspend fun checkHealth(baseUrl: String? = null): Result<Unit> = safe {
         val r = call(baseUrl) { api, _ -> api.health() }

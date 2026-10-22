@@ -44,6 +44,21 @@ data class SendMessageResponse(
 
 data class HealthResponse(val status: String?)
 
+data class MemoryDto(
+    val id: String,
+    val kind: String,
+    val content: String,
+    @SerializedName("event_date") val eventDate: String? = null,
+    @SerializedName("remind_on") val remindOn: String? = null,
+    @SerializedName("reminded_at") val remindedAt: String? = null,
+    @SerializedName("expires_at") val expiresAt: String? = null,
+    val active: Boolean = true,
+    @SerializedName("created_at") val createdAt: String = "",
+    @SerializedName("updated_at") val updatedAt: String = "",
+)
+
+data class CheckInResponse(val message: MessageDto? = null)
+
 data class ErrorBody(val error: ErrorDetail?)
 data class ErrorDetail(val code: String?, val message: String?)
 

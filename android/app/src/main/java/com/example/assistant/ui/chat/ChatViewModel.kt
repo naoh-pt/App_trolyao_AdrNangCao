@@ -18,6 +18,8 @@ import com.example.assistant.domain.Emotion
 import com.example.assistant.ui.demo.DemoCommand
 import com.example.assistant.ui.demo.DemoState
 import com.example.assistant.ui.demo.reduceDemo
+import com.example.assistant.ui.memory.ConversationEntryCheckIn
+import com.example.assistant.ui.companion.*
 import com.example.assistant.ui.character.animationSpecFor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -67,6 +69,7 @@ data class ChatUiState(
     val emotion: Emotion = Emotion.NEUTRAL,
     val input: String = "",
     val demo: DemoState = DemoState(),
+    val companion: CompanionChatState = CompanionChatState(),
     val reveal: ReplyReveal? = null,
     val playbackToken: String? = null,
     val speechActive: Boolean = false,
@@ -277,6 +280,7 @@ class ChatViewModel(
     private var talkJob: Job? = null
     private var screenActive = false
     private var typewriterEnabled = true
+    private val entryCheckIn = ConversationEntryCheckIn(viewModelScope, repo::checkIn, repo::cacheCheckIn, ::prepareMoodCheckIn)
     private val revealController = ReplyRevealController()
 
     fun setTypewriterEnabled(enabled: Boolean) {
@@ -333,7 +337,15 @@ class ChatViewModel(
     }
 
     init {
-        refresh()
+        if (initialConversationId == null) refresh()
+        // One real existing-conversation entry per ViewModel, retained across rotation.
+        initialConversationId?.let { id ->
+            viewModelScope.launch {
+                // History loads first, preventing refresh from removing a new cached check-in.
+                loadMessages(id)
+                if (conversationId.value == id) entryCheckIn.enter(id)
+            }
+        }
     }
 
     fun setTtsEnabled(enabled: Boolean) {
@@ -374,6 +386,47 @@ class ChatViewModel(
         _ui.update { s -> s.copy(input = text.take(MAX_LEN)) }
     }
 
+    private suspend fun prepareMoodCheckIn(memoryDelivered: Boolean?) {
+        if (memoryDelivered != false) return
+        val id = conversationId.value ?: return
+        val owner = repo.ownerId()
+        val preferences = repo.getCompanion(owner).getOrNull() ?: return
+        if (!moodEligible(true, preferences.moodCheckInEnabled, memoryDelivered, false)) return
+        if (conversationId.value != id || _ui.value.sending || _ui.value.pending != null || _ui.value.companion.entryEngaged) return
+        val claimed = repo.claimMoodDate(owner, moodDate())
+        if (claimed && conversationId.value == id && !_ui.value.sending && _ui.value.pending == null && !_ui.value.companion.entryEngaged) {
+            _ui.update { it.copy(companion = it.companion.copy(moodVisible = true, moodOwner = owner)) }
+        }
+    }
+
+    fun dismissMood() { _ui.update { it.copy(companion = it.companion.copy(moodVisible = false)) } }
+    fun openManualMood() { _ui.update { it.openManualMood() } }
+    fun dismissManualMood() { _ui.update { it.dismissManualMood() } }
+    fun chooseMood(choice: MoodChoice) = sendCompanion(choice, null)
+    fun chooseSupport(choice: SupportChoice) = sendCompanion(null, choice)
+
+    private fun sendCompanion(mood: MoodChoice?, support: SupportChoice?) {
+        val current = _ui.value
+        val selection = current.selectCompanion(mood, support)
+        selection ?: return
+        _ui.update { it.copy(companion = selection.first) }
+        val id = conversationId.value
+        viewModelScope.launch {
+            val ownerMatches = mood == null || current.companion.manualMoodVisible || repo.ownerId() == current.companion.moodOwner
+            if (conversationId.value != id || !ownerMatches) {
+                _ui.update { it.copy(companion = it.companion.copy(selectionBusy = false)) }
+                return@launch
+            }
+            val latest = _ui.value
+            if (!latest.sending && latest.pending == null && latest.online) {
+                val draft = latest.input
+                onInputChange(selection.second)
+                send()
+                _ui.update { it.copy(input = draft, companion = it.companion.copy(selectionBusy = false)) }
+            } else _ui.update { it.copy(companion = it.companion.copy(selectionBusy = false)) }
+        }
+    }
+
     fun onDemoCommand(command: DemoCommand) {
         _ui.update { it.reduceDemo(command) }
     }
@@ -406,6 +459,7 @@ class ChatViewModel(
                 input = if (s.pending == null) "" else it.input,
                 error = null,
                 sending = true,
+                companion = it.companion.userTurn(),
                 reveal = null,
                 playbackToken = null,
                 speechActive = false,
@@ -464,6 +518,7 @@ class ChatViewModel(
                             characterState = coordinator.characterState,
                             emotion = coordinator.emotion,
                             activeActions = updatedActions,
+                            companion = it.companion.copy(supportMessageId = if (isNew && botAction == null && emotionalSupportCue(text)) botMsg.id else null),
                         )
                     }
 
@@ -600,6 +655,7 @@ class ChatViewModel(
 
     fun newChat() {
         if (_ui.value.sending) return
+        entryCheckIn.leave()
         revealController.cancel()
         talkJob?.cancel()
         talkJob = null
